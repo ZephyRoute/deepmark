@@ -49,9 +49,9 @@ export const ENEMIES: Record<EnemyKind, EnemyArchetype> = {
   wardenPrime: {
     kind: 'wardenPrime',
     name: 'Warden Prime',
-    maxHp: 16,
-    dmgMin: 3,
-    dmgMax: 5,
+    maxHp: 12,
+    dmgMin: 2,
+    dmgMax: 4,
     color: '#7e57c2',
     size: 56,
     shape: 'square',
