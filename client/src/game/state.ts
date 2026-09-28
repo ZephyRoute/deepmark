@@ -1,40 +1,94 @@
 import { resolveExchange } from './combat';
-import { buildFloor, isWalkable, type FloorLayout } from './floor';
+import { ENEMIES, type EnemyKind } from './enemies';
+import { buildFloor, isWalkable, MAX_FLOOR, type FloorLayout, type RelicKind } from './floor';
+import { recordRun } from './progress';
 import { mulberry32, freshSeed, type Rng } from './rng';
 
-export type Mode = 'title' | 'explore' | 'combat' | 'result';
+export type Mode = 'title' | 'explore' | 'combat' | 'choice' | 'result';
 export type ResultKind = 'extracted' | 'dead';
+
+export interface EnemyState {
+  x: number;
+  y: number;
+  hp: number;
+  maxHp: number;
+  alive: boolean;
+  kind: EnemyKind;
+}
+
+export interface RelicState {
+  x: number;
+  y: number;
+  kind: RelicKind;
+  collected: boolean;
+}
+
+export type GameEvent =
+  | { type: 'combatStart' }
+  | { type: 'playerHit'; amount: number; x: number; y: number }
+  | { type: 'enemyHit'; amount: number; x: number; y: number }
+  | { type: 'enemyDied'; x: number; y: number }
+  | { type: 'relic'; kind: RelicKind; x: number; y: number }
+  | { type: 'floorCleared' }
+  | { type: 'descended'; floor: number }
+  | { type: 'extracted' }
+  | { type: 'dead' };
 
 export interface RunState {
   mode: Mode;
   seed: number;
   rng: Rng;
+  floorNumber: number;
   layout: FloorLayout;
   player: { x: number; y: number; hp: number; maxHp: number };
-  enemy: { x: number; y: number; hp: number; maxHp: number; alive: boolean };
-  relic: { x: number; y: number; collected: boolean };
+  enemies: EnemyState[];
+  activeEnemyIndex: number | null;
+  relics: RelicState[];
   relicsThisRun: number;
+  scoreThisRun: number;
   resultKind: ResultKind | null;
+  newBest: boolean;
   log: string[];
+  events: GameEvent[];
 }
 
 const PLAYER_MAX_HP = 10;
-const ENEMY_MAX_HP = 6;
 const MAX_LOG_LINES = 4;
+const RELIC_VALUE: Record<RelicKind, number> = { common: 1, rare: 2, core: 3 };
+
+function fromLayout(layout: FloorLayout): { enemies: EnemyState[]; relics: RelicState[] } {
+  return {
+    enemies: layout.enemies.map((e) => ({
+      x: e.x,
+      y: e.y,
+      hp: ENEMIES[e.kind].maxHp,
+      maxHp: ENEMIES[e.kind].maxHp,
+      alive: true,
+      kind: e.kind,
+    })),
+    relics: layout.relics.map((r) => ({ x: r.x, y: r.y, kind: r.kind, collected: false })),
+  };
+}
 
 export function newRun(seed: number = freshSeed()): RunState {
-  const layout = buildFloor();
+  const layout = buildFloor(1);
+  const { enemies, relics } = fromLayout(layout);
   return {
     mode: 'explore',
     seed,
     rng: mulberry32(seed),
+    floorNumber: 1,
     layout,
     player: { ...layout.playerStart, hp: PLAYER_MAX_HP, maxHp: PLAYER_MAX_HP },
-    enemy: { ...layout.enemyPos, hp: ENEMY_MAX_HP, maxHp: ENEMY_MAX_HP, alive: true },
-    relic: { ...layout.relicPos, collected: false },
+    enemies,
+    activeEnemyIndex: null,
+    relics,
     relicsThisRun: 0,
+    scoreThisRun: 0,
     resultKind: null,
+    newBest: false,
     log: ['You enter the dungeon. Find the stairs, or find your death.'],
+    events: [],
   };
 }
 
@@ -43,8 +97,29 @@ function pushLog(state: RunState, line: string): void {
   if (state.log.length > MAX_LOG_LINES) state.log.shift();
 }
 
-function atEnemy(state: RunState, x: number, y: number): boolean {
-  return state.enemy.alive && state.enemy.x === x && state.enemy.y === y;
+function pushEvent(state: RunState, event: GameEvent): void {
+  state.events.push(event);
+}
+
+export function drainEvents(state: RunState): GameEvent[] {
+  return state.events.splice(0, state.events.length);
+}
+
+function aliveEnemyIndexAt(state: RunState, x: number, y: number): number {
+  return state.enemies.findIndex((e) => e.alive && e.x === x && e.y === y);
+}
+
+function finishRun(state: RunState, kind: ResultKind): void {
+  state.mode = 'result';
+  state.resultKind = kind;
+  const relicsKept = kind === 'dead' ? 0 : state.relicsThisRun;
+  if (kind === 'dead') {
+    state.relicsThisRun = 0;
+    state.scoreThisRun = 0;
+  }
+  const { isNewBest } = recordRun(state.floorNumber, relicsKept);
+  state.newBest = isNewBest && kind === 'extracted';
+  pushEvent(state, kind === 'extracted' ? { type: 'extracted' } : { type: 'dead' });
 }
 
 export function tryMove(state: RunState, dx: number, dy: number): void {
@@ -52,9 +127,13 @@ export function tryMove(state: RunState, dx: number, dy: number): void {
   const nx = state.player.x + dx;
   const ny = state.player.y + dy;
 
-  if (atEnemy(state, nx, ny)) {
+  const enemyIdx = aliveEnemyIndexAt(state, nx, ny);
+  if (enemyIdx >= 0) {
     state.mode = 'combat';
-    pushLog(state, 'A Warden blocks the way.');
+    state.activeEnemyIndex = enemyIdx;
+    const enemy = state.enemies[enemyIdx];
+    if (enemy) pushLog(state, `${ENEMIES[enemy.kind].name} blocks the way.`);
+    pushEvent(state, { type: 'combatStart' });
     return;
   }
 
@@ -63,46 +142,82 @@ export function tryMove(state: RunState, dx: number, dy: number): void {
   state.player.x = nx;
   state.player.y = ny;
 
-  if (!state.relic.collected && state.relic.x === nx && state.relic.y === ny) {
-    state.relic.collected = true;
+  const relic = state.relics.find((r) => !r.collected && r.x === nx && r.y === ny);
+  if (relic) {
+    relic.collected = true;
     state.relicsThisRun += 1;
-    pushLog(state, 'You pry a relic loose. It hums faintly.');
+    state.scoreThisRun += RELIC_VALUE[relic.kind];
+    pushLog(state, `You pry loose a ${relic.kind} relic. It hums faintly.`);
+    pushEvent(state, { type: 'relic', kind: relic.kind, x: relic.x, y: relic.y });
   }
 
   if (state.layout.stairsPos.x === nx && state.layout.stairsPos.y === ny) {
-    state.mode = 'result';
-    state.resultKind = 'extracted';
-    pushLog(state, 'You reach the stairs and extract.');
+    if (state.layout.isFinalFloor) {
+      pushLog(state, 'You climb into daylight. The depths let you go.');
+      finishRun(state, 'extracted');
+    } else {
+      state.mode = 'choice';
+      pushLog(state, 'Floor cleared. Descend or extract?');
+      pushEvent(state, { type: 'floorCleared' });
+    }
   }
 }
 
 export function attack(state: RunState): void {
-  if (state.mode !== 'combat') return;
-  const result = resolveExchange(state.rng, state.player.hp, state.enemy.hp);
+  if (state.mode !== 'combat' || state.activeEnemyIndex === null) return;
+  const enemy = state.enemies[state.activeEnemyIndex];
+  if (!enemy) return;
+  const archetype = ENEMIES[enemy.kind];
+  const result = resolveExchange(state.rng, state.player.hp, enemy.hp, archetype.dmgMin, archetype.dmgMax);
 
-  state.enemy.hp = Math.max(0, state.enemy.hp - result.playerDamageDealt);
-  pushLog(state, `You strike the Warden for ${result.playerDamageDealt}.`);
+  enemy.hp = Math.max(0, enemy.hp - result.playerDamageDealt);
+  pushLog(state, `You strike the ${archetype.name} for ${result.playerDamageDealt}.`);
+  pushEvent(state, { type: 'enemyHit', amount: result.playerDamageDealt, x: enemy.x, y: enemy.y });
 
   if (result.enemyDied) {
-    state.enemy.alive = false;
+    enemy.alive = false;
     state.mode = 'explore';
-    pushLog(state, 'The Warden falls. The way is clear.');
+    state.activeEnemyIndex = null;
+    pushLog(state, `The ${archetype.name} falls.`);
+    pushEvent(state, { type: 'enemyDied', x: enemy.x, y: enemy.y });
     return;
   }
 
   state.player.hp = Math.max(0, state.player.hp - result.enemyDamageDealt);
-  pushLog(state, `The Warden hits back for ${result.enemyDamageDealt}.`);
+  pushLog(state, `The ${archetype.name} hits back for ${result.enemyDamageDealt}.`);
+  pushEvent(state, { type: 'playerHit', amount: result.enemyDamageDealt, x: state.player.x, y: state.player.y });
 
   if (result.playerDied) {
-    state.mode = 'result';
-    state.resultKind = 'dead';
-    state.relicsThisRun = 0;
     pushLog(state, 'You collapse. Nothing extracted, nothing kept.');
+    finishRun(state, 'dead');
   }
 }
 
 export function retreat(state: RunState): void {
   if (state.mode !== 'combat') return;
   state.mode = 'explore';
-  pushLog(state, 'You back away from the Warden.');
+  state.activeEnemyIndex = null;
+  pushLog(state, 'You back away.');
+}
+
+export function chooseDescend(state: RunState): void {
+  if (state.mode !== 'choice') return;
+  if (state.floorNumber >= MAX_FLOOR) return;
+  state.floorNumber += 1;
+  const layout = buildFloor(state.floorNumber);
+  const { enemies, relics } = fromLayout(layout);
+  state.layout = layout;
+  state.enemies = enemies;
+  state.relics = relics;
+  state.player.x = layout.playerStart.x;
+  state.player.y = layout.playerStart.y;
+  state.mode = 'explore';
+  pushLog(state, `You descend to floor ${state.floorNumber}.`);
+  pushEvent(state, { type: 'descended', floor: state.floorNumber });
+}
+
+export function chooseExtract(state: RunState): void {
+  if (state.mode !== 'choice') return;
+  pushLog(state, "You extract with what you've gathered.");
+  finishRun(state, 'extracted');
 }
