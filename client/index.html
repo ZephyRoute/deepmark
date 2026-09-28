@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deepmark</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #0b0d12;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+    }
+    #app {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    canvas {
+      image-rendering: pixelated;
+      border: 2px solid #2a2f3a;
+      background: #14171f;
+    }
+    #hint {
+      color: #6b7280;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="game" width="832" height="680"></canvas>
+    <div id="hint">WASD / arrows to move. Enter to confirm. Esc to flee.</div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
