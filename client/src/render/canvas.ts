@@ -29,7 +29,7 @@ function gridOffsetX(canvasWidth: number): number {
   return (canvasWidth - GRID_WIDTH * TILE_SIZE) / 2;
 }
 
-export function drawTitle(ctx: CanvasRenderingContext2D, progress: Progress): void {
+export function drawTitle(ctx: CanvasRenderingContext2D, progress: Progress, onchainSummary: string): void {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
   ctx.fillStyle = COLOR_BG;
@@ -56,6 +56,12 @@ export function drawTitle(ctx: CanvasRenderingContext2D, progress: Progress): vo
       w / 2,
       h / 2 + 70
     );
+  }
+
+  if (onchainSummary) {
+    ctx.font = '13px ui-monospace, monospace';
+    ctx.fillStyle = '#4fc3f7';
+    ctx.fillText(onchainSummary, w / 2, h / 2 + 95);
   }
 }
 
@@ -95,7 +101,12 @@ function drawBar(
   ctx.fillRect(cx - width / 2, topY, width * Math.max(0, ratio), height);
 }
 
-export function drawRun(ctx: CanvasRenderingContext2D, run: RunState, progress: Progress): void {
+export function drawRun(
+  ctx: CanvasRenderingContext2D,
+  run: RunState,
+  progress: Progress,
+  chainStatus: string
+): void {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
   ctx.fillStyle = COLOR_BG;
@@ -178,7 +189,7 @@ export function drawRun(ctx: CanvasRenderingContext2D, run: RunState, progress: 
 
   if (run.mode === 'combat') drawCombatPrompt(ctx, w, h, run);
   if (run.mode === 'choice') drawChoicePrompt(ctx, w, h, run);
-  if (run.mode === 'result' && run.resultKind) drawResult(ctx, w, h, run, progress);
+  if (run.mode === 'result' && run.resultKind) drawResult(ctx, w, h, run, progress, chainStatus);
 }
 
 function drawHud(ctx: CanvasRenderingContext2D, run: RunState, y: number): void {
@@ -228,7 +239,8 @@ function drawResult(
   w: number,
   h: number,
   run: RunState,
-  progress: Progress
+  progress: Progress,
+  chainStatus: string
 ): void {
   ctx.fillStyle = 'rgba(11, 13, 18, 0.92)';
   ctx.fillRect(0, 0, w, h);
@@ -262,4 +274,10 @@ function drawResult(
   ctx.fillStyle = COLOR_TEXT;
   ctx.font = '16px ui-monospace, monospace';
   ctx.fillText('[ Enter ] Play again', w / 2, h / 2 + 115);
+
+  if (chainStatus) {
+    ctx.fillStyle = '#4fc3f7';
+    ctx.font = '13px ui-monospace, monospace';
+    ctx.fillText(chainStatus, w / 2, h / 2 + 140);
+  }
 }
