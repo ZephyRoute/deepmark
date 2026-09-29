@@ -48,20 +48,24 @@ export function drawTitle(ctx: CanvasRenderingContext2D, progress: Progress, onc
   ctx.font = 'bold 20px ui-monospace, monospace';
   ctx.fillText('[ Enter ] Descend', w / 2, h / 2 + 30);
 
+  ctx.font = '14px ui-monospace, monospace';
+  ctx.fillStyle = COLOR_MUTED;
+  ctx.fillText('[ L ] Leaderboard', w / 2, h / 2 + 58);
+
   if (progress.runsPlayed > 0) {
     ctx.font = '15px ui-monospace, monospace';
     ctx.fillStyle = COLOR_MUTED;
     ctx.fillText(
       `Best floor: ${progress.bestFloor} / ${MAX_FLOOR}    Best relics: ${progress.bestRelics}    Runs: ${progress.runsPlayed}`,
       w / 2,
-      h / 2 + 70
+      h / 2 + 90
     );
   }
 
   if (onchainSummary) {
     ctx.font = '13px ui-monospace, monospace';
     ctx.fillStyle = '#4fc3f7';
-    ctx.fillText(onchainSummary, w / 2, h / 2 + 95);
+    ctx.fillText(onchainSummary, w / 2, h / 2 + 115);
   }
 }
 
@@ -280,4 +284,80 @@ function drawResult(
     ctx.font = '13px ui-monospace, monospace';
     ctx.fillText(chainStatus, w / 2, h / 2 + 140);
   }
+}
+
+function shortenAddress(address: string): string {
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
+export interface LeaderboardRow {
+  address: string;
+  bestFloor: number;
+  bestRelics: number;
+  totalRuns: number;
+}
+
+export function drawLeaderboard(
+  ctx: CanvasRenderingContext2D,
+  rows: LeaderboardRow[] | null,
+  loading: boolean,
+  playerAddress: string
+): void {
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+  ctx.fillStyle = COLOR_BG;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = COLOR_TEXT;
+  ctx.font = 'bold 28px ui-monospace, monospace';
+  ctx.fillText('LEADERBOARD', w / 2, 70);
+
+  ctx.font = '13px ui-monospace, monospace';
+  ctx.fillStyle = COLOR_MUTED;
+  ctx.fillText('Stellar testnet, read live from the deployed contract', w / 2, 96);
+
+  if (loading) {
+    ctx.fillStyle = COLOR_TEXT;
+    ctx.font = '16px ui-monospace, monospace';
+    ctx.fillText('Loading...', w / 2, h / 2);
+  } else if (!rows || rows.length === 0) {
+    ctx.fillStyle = COLOR_MUTED;
+    ctx.font = '16px ui-monospace, monospace';
+    ctx.fillText('No runs recorded on-chain yet.', w / 2, h / 2);
+  } else {
+    const startY = 150;
+    const rowHeight = 34;
+    ctx.font = '15px ui-monospace, monospace';
+    ctx.textAlign = 'left';
+
+    const colRank = w / 2 - 260;
+    const colAddress = w / 2 - 200;
+    const colFloor = w / 2 + 40;
+    const colRelics = w / 2 + 130;
+    const colRuns = w / 2 + 220;
+
+    ctx.fillStyle = COLOR_MUTED;
+    ctx.fillText('#', colRank, startY);
+    ctx.fillText('player', colAddress, startY);
+    ctx.fillText('floor', colFloor, startY);
+    ctx.fillText('relics', colRelics, startY);
+    ctx.fillText('runs', colRuns, startY);
+
+    rows.forEach((row, index) => {
+      const y = startY + rowHeight * (index + 1);
+      const isYou = row.address === playerAddress;
+      ctx.fillStyle = isYou ? '#4fc3f7' : COLOR_TEXT;
+      ctx.fillText(`${index + 1}`, colRank, y);
+      ctx.fillText(isYou ? `${shortenAddress(row.address)} (you)` : shortenAddress(row.address), colAddress, y);
+      ctx.fillText(`${row.bestFloor} / ${MAX_FLOOR}`, colFloor, y);
+      ctx.fillText(`${row.bestRelics}`, colRelics, y);
+      ctx.fillText(`${row.totalRuns}`, colRuns, y);
+    });
+  }
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = COLOR_MUTED;
+  ctx.font = '14px ui-monospace, monospace';
+  ctx.fillText('[ L ] or [ Esc ] Back', w / 2, h - 40);
 }

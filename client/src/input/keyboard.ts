@@ -1,4 +1,4 @@
-export type Action = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'cancel';
+export type Action = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'cancel' | 'leaderboard';
 
 const KEY_MAP: Record<string, Action> = {
   ArrowUp: 'up',
@@ -12,6 +12,7 @@ const KEY_MAP: Record<string, Action> = {
   Enter: 'confirm',
   Space: 'confirm',
   Escape: 'cancel',
+  KeyL: 'leaderboard',
 };
 
 export function onAction(handler: (action: Action) => void): void {

@@ -11,7 +11,7 @@ import {
 } from './game/state';
 import { loadProgress, type Progress } from './game/progress';
 import { onAction, type Action } from './input/keyboard';
-import { drawRun, drawTitle } from './render/canvas';
+import { drawLeaderboard, drawRun, drawTitle, type LeaderboardRow } from './render/canvas';
 import { spawnPopup, triggerShake } from './render/effects';
 import {
   sfxDead,
@@ -24,7 +24,7 @@ import {
   sfxRelic,
 } from './render/audio';
 import { getPlayerKeypair } from './stellar/account';
-import { fetchOnchainRecord, submitRunResult, type PlayerRecord } from './stellar/contract';
+import { fetchLeaderboard, fetchOnchainRecord, submitRunResult, type PlayerRecord } from './stellar/contract';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d');
@@ -34,9 +34,15 @@ let run: RunState | null = null;
 let progress: Progress = loadProgress();
 let chainStatus = '';
 let onchainRecord: PlayerRecord | null = null;
+let playerAddress = '';
+
+let showLeaderboard = false;
+let leaderboardLoading = false;
+let leaderboardRows: LeaderboardRow[] | null = null;
 
 getPlayerKeypair()
   .then(async (keypair) => {
+    playerAddress = keypair.publicKey();
     try {
       onchainRecord = await fetchOnchainRecord(keypair);
     } catch (err) {
@@ -44,6 +50,27 @@ getPlayerKeypair()
     }
   })
   .catch((err) => console.warn('Deepmark: could not set up a testnet account', err));
+
+async function openLeaderboard(): Promise<void> {
+  showLeaderboard = true;
+  if (leaderboardRows || leaderboardLoading) return;
+  leaderboardLoading = true;
+  try {
+    const keypair = await getPlayerKeypair();
+    const entries = await fetchLeaderboard(keypair, 10);
+    leaderboardRows = entries.map((entry) => ({
+      address: entry.address,
+      bestFloor: entry.record.best_floor,
+      bestRelics: entry.record.best_relics,
+      totalRuns: entry.record.total_runs,
+    }));
+  } catch (err) {
+    console.warn('Deepmark: could not load the leaderboard', err);
+    leaderboardRows = [];
+  } finally {
+    leaderboardLoading = false;
+  }
+}
 
 function onchainSummary(): string {
   if (!onchainRecord) return '';
@@ -57,6 +84,7 @@ async function submitToChain(floorReached: number, relicsKept: number): Promise<
     const { hash, record } = await submitRunResult(keypair, floorReached, relicsKept);
     onchainRecord = record;
     chainStatus = hash ? `Saved on-chain (tx ${hash.slice(0, 8)}...)` : 'Saved on-chain';
+    leaderboardRows = null;
   } catch (err) {
     console.warn('Deepmark: failed to record this run on-chain', err);
     chainStatus = 'Could not save to Stellar this time';
@@ -113,8 +141,14 @@ function handleEvent(event: GameEvent): void {
 }
 
 onAction((action) => {
+  if (showLeaderboard) {
+    if (action === 'leaderboard' || action === 'cancel') showLeaderboard = false;
+    return;
+  }
+
   if (!run) {
     if (action === 'confirm') run = newRun();
+    if (action === 'leaderboard') void openLeaderboard();
     return;
   }
 
@@ -141,7 +175,9 @@ onAction((action) => {
 });
 
 function frame(): void {
-  if (!run) {
+  if (showLeaderboard) {
+    drawLeaderboard(ctx!, leaderboardRows, leaderboardLoading, playerAddress);
+  } else if (!run) {
     drawTitle(ctx!, progress, onchainSummary());
   } else {
     drawRun(ctx!, run, progress, chainStatus);

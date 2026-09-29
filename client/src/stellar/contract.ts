@@ -19,6 +19,9 @@ interface DeepmarkContractApi {
     args: { player: string },
     options?: contract.MethodOptions
   ) => Promise<contract.AssembledTransaction<PlayerRecord | undefined>>;
+  leaderboard: (
+    options?: contract.MethodOptions
+  ) => Promise<contract.AssembledTransaction<string[]>>;
 }
 
 function makeSigner(keypair: Keypair): NonNullable<contract.ClientOptions['signTransaction']> {
@@ -84,4 +87,37 @@ export async function fetchOnchainRecord(keypair: Keypair): Promise<PlayerRecord
   const client = await getClient(keypair);
   const assembled = await client.get_record({ player: keypair.publicKey() });
   return assembled.result ?? null;
+}
+
+export interface LeaderboardEntry {
+  address: string;
+  record: PlayerRecord;
+}
+
+const LEADERBOARD_FETCH_CAP = 100;
+
+/**
+ * Reads the on-chain address list, then each address's record, all as free
+ * simulations. Sorted client-side (best floor, then best relics) so the
+ * contract itself never needs to sort or paginate.
+ */
+export async function fetchLeaderboard(keypair: Keypair, limit = 10): Promise<LeaderboardEntry[]> {
+  const client = await getClient(keypair);
+  const boardTx = await client.leaderboard();
+  const addresses = (boardTx.result ?? []).slice(0, LEADERBOARD_FETCH_CAP);
+
+  const entries = await Promise.all(
+    addresses.map(async (address): Promise<LeaderboardEntry | null> => {
+      const recordTx = await client.get_record({ player: address });
+      return recordTx.result ? { address, record: recordTx.result } : null;
+    })
+  );
+
+  return entries
+    .filter((entry): entry is LeaderboardEntry => entry !== null)
+    .sort(
+      (a, b) =>
+        b.record.best_floor - a.record.best_floor || b.record.best_relics - a.record.best_relics
+    )
+    .slice(0, limit);
 }
