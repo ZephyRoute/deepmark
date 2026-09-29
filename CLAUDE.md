@@ -8,11 +8,10 @@ Ship a small, exceptionally polished game first. Stellar must provide meaningful
 
 ## Architecture rules
 
-- Game simulation runs on Cougr (ECS on Soroban, `soroban-sdk` 25.1, `wasm32v1-none`). Use the `turn-based` and `hidden-info` templates as the base; do not hand-roll a custom ECS.
-- One on-chain transaction per meaningful decision (floor entry, combat resolution, extract-or-push, claim). Never one transaction per frame or per input.
-- Dungeon seeds are committed as a hash and revealed progressively (hidden-info pattern) so no client can precompute the layout.
-- Session keys (Cougr `session-auth`) authorize a run's worth of turns after one signature. Do not prompt a wallet signature on every action.
-- Rendering, animation, particles, camera and audio are entirely client-side and never block on a transaction confirmation except at extract/death.
+- The contract (`contracts/deepmark-contract`) is scaffolded with the Cougr CLI but does not use `cougr-core`'s ECS at runtime: Deepmark's data model is one persistent record per player address, which does not fit an entity-component model built for many anonymous game entities. Plain `soroban-sdk` storage is correct here; do not force ECS macros onto this contract. If a future contract genuinely needs many synced game entities (a shared dungeon, live multiplayer), Cougr's `turn-based`/`hidden-info`/`session-auth` templates are the right starting point then, not now.
+- One on-chain transaction per finished run (`record_run`), not one per floor or per combat exchange. Soroban round trips take seconds; a transaction per attack would make the game unplayable. See `docs/architecture/onchain-boundary.md` for the full reasoning and what this trade-off does and does not provide.
+- No dungeon-seed commitment on-chain: the three floors are fixed, hand-authored layouts, not generated from the seed, so there is nothing about the layout to hide.
+- Rendering, animation, particles, camera and audio are entirely client-side and never block on a transaction confirmation. The one `record_run` call happens after the result screen is already showing, never mid-run.
 
 ## Coding rules
 
@@ -29,8 +28,8 @@ Ship a small, exceptionally polished game first. Stellar must provide meaningful
 ## Blockchain rules
 
 - Testnet first, always. Mainnet only after the full checklist in `deepmark-internal` passes.
-- No custodial key handling in application code. Cavos embedded wallets keep the private key on-device; Claude never generates, stores or logs a real private key or seed phrase.
-- No speculative token. Layer 1 (off-chain currency) and Layer 2 (scarce on-chain relics) come before any Layer 3 SAC token, and only if the design actually requires it.
+- No custodial key handling on any server: the player's Stellar keypair is generated in the browser and kept in that browser's `localStorage`, and Claude never logs or prints a real secret key. This is a stand-in for Cavos's passkey onboarding, which needs an app ID from Cavos's own dashboard; swap it in by replacing `client/src/stellar/account.ts` only, nothing else depends on how the keypair was obtained.
+- No speculative token. Relics are counted per rarity in the player's on-chain record, not minted as individual assets; a real scarce/transferable relic system is future scope, not something to add without the design actually requiring it.
 
 ## Security rules
 
@@ -50,8 +49,8 @@ Ship a small, exceptionally polished game first. Stellar must provide meaningful
 
 ## Testing and deployment
 
-- Every contract ships with a Cougr `GameHarness` test suite before it is considered done.
-- Deployment order: local simulation, then Stellar testnet with end-to-end gameplay and failure-mode tests, then a mainnet candidate build only if safe.
+- Every contract entrypoint ships with tests (`cargo test`) before it is considered done. Pure rule logic (see `systems.rs`) is unit tested directly, without an `Env`; entrypoints are tested through `Env::default()` plus `mock_all_auths()`.
+- Deployment order: `cargo test` and `stellar contract build` locally, then Stellar testnet with a real end-to-end call (verify the actual transaction, not just the simulation) before trusting a client integration against it, then a mainnet candidate build only if safe.
 
 ## Style
 
