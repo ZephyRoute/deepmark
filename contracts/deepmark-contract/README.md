@@ -51,3 +51,9 @@ The build writes `target/wasm32v1-none/release/deepmark_contract.wasm`, which is
 - No re-simulation of the run; see "Trust model" above.
 - The leaderboard is an unsorted address list capped at 500 entries; the client sorts by reading each record. A round with more than 500 distinct players would need a different structure.
 - `floor_reached` and `relics_kept` are trusted inputs beyond the floor clamp; there is no check that `relics_kept` is plausible for the claimed floor.
+
+## Immutability and audit status
+
+There is no admin address, no upgrade function, and no pause switch anywhere in this contract. What is deployed is permanent: fixing a bug means deploying a new contract ID, not patching this one in place. That is an explicit choice, not an oversight, appropriate here because the contract holds no funds and has no admin surface to abuse in the first place; an upgrade or pause mechanism would only add an attack surface (a key that could rewrite the rules) without protecting anything of value.
+
+No third-party audit was done. The contract was not sent to formal or paid review before its first mainnet deployment. This is a deliberate, documented risk acceptance, not an omission: `record_run`, `get_record`, and `leaderboard` move no funds, mint no token, and hold no admin authority capable of harming a user; the entire blast radius of a bug here is a wrong number in a game record. That is a different risk class from a contract custodying value, where an audit would be non-negotiable before mainnet. Review that did happen: 10 automated tests (4 pure-logic, 6 through a sandboxed `Env`), a live testnet deployment exercised through `stellar contract invoke` and a real browser playthrough, and a manual pass against the checklist in the `deploy-stellar-mainnet` skill (auth paths, overflow handling, storage TTL, no `unwrap()` on user-controlled paths) before the mainnet deploy in the repo's commit history.

@@ -19,7 +19,7 @@ pub fn apply_run(existing: Option<PlayerRecord>, floor_reached: u32, relics_kept
     let updated = PlayerRecord {
         best_floor: previous.best_floor.max(floor_reached),
         best_relics: previous.best_relics.max(relics_kept),
-        total_runs: previous.total_runs + 1,
+        total_runs: previous.total_runs.saturating_add(1),
     };
 
     (updated, is_new_best)
