@@ -29,3 +29,7 @@ stellar contract build
 ```
 
 Deployed to testnet as `deepmark` (see `stellar contract deploy` in the repo history for the exact command).
+
+## Checks
+
+GitHub Actions runs the basic commands on every pull request and on pushes to `main`: `bun run typecheck`, `bun run build`, `cargo test`, and `stellar contract build`.
