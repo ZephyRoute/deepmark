@@ -1,5 +1,6 @@
 import { ENEMIES } from '../game/enemies';
 import { MAX_FLOOR } from '../game/floor';
+import { HEROES, type HeroId } from '../game/heroes';
 import type { Progress } from '../game/progress';
 import type { RunState } from '../game/state';
 
@@ -19,6 +20,7 @@ export interface ChromeView {
   progress: Progress;
   onchainSummary: string;
   chainStatus: string;
+  heroId: HeroId;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -97,7 +99,7 @@ function overlaySignature(view: ChromeView): string {
     return `board:${view.leaderboardLoading}:${rows ?? ''}:${view.playerAddress}`;
   }
   if (!view.run) {
-    return `title:${view.progress.runsPlayed}:${view.progress.bestFloor}:${view.progress.bestRelics}:${view.onchainSummary}`;
+    return `title:${view.heroId}:${view.progress.runsPlayed}:${view.progress.bestFloor}:${view.progress.bestRelics}:${view.onchainSummary}`;
   }
   if (view.run.mode === 'result') {
     return `result:${view.run.resultKind}:${view.run.floorNumber}:${view.run.relicsThisRun}:${view.run.scoreThisRun}:${view.run.player.hp}:${view.run.newBest}:${view.chainStatus}:${view.progress.bestFloor}:${view.progress.bestRelics}`;
@@ -117,6 +119,10 @@ function titleCard(view: ChromeView): HTMLElement {
   card.append(el('p', 'eyebrow', 'Stellar testnet'));
   card.append(el('h1', 'title', 'Deepmark'));
   card.append(el('p', 'tagline', 'Leave a mark in the depths, or lose it on the way out.'));
+  const picks = el('div', 'hero-picks');
+  picks.append(heroPick('lantern', view.heroId));
+  picks.append(heroPick('cinder', view.heroId));
+  card.append(picks);
   const actions = el('div', 'title-actions');
   actions.append(button('Descend', 'confirm', 'btn btn-primary'));
   actions.append(button('Leaderboard', 'leaderboard', 'btn'));
@@ -132,8 +138,25 @@ function titleCard(view: ChromeView): HTMLElement {
     );
   }
   if (view.onchainSummary) card.append(el('p', 'chain', view.onchainSummary));
-  card.append(el('p', 'hint', 'WASD or arrows to move. Enter acts. Esc retreats or extracts.'));
+  card.append(el('p', 'hint', 'Left and right choose a delver. Enter descends. WASD moves. Esc retreats or extracts.'));
   return card;
+}
+
+function heroPick(id: HeroId, selectedId: HeroId): HTMLButtonElement {
+  const hero = HEROES[id];
+  const selected = id === selectedId;
+  const node = el('button', selected ? 'hero-pick is-selected' : 'hero-pick');
+  node.type = 'button';
+  node.dataset.action = id === 'lantern' ? 'pickLantern' : 'pickCinder';
+  node.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  const portrait = el('img', 'hero-portrait');
+  portrait.src = `/art/${hero.art}`;
+  portrait.alt = '';
+  const copy = el('span', 'hero-copy');
+  copy.append(el('span', 'hero-name', hero.name));
+  copy.append(el('span', 'hero-blurb', hero.blurb));
+  node.append(portrait, copy);
+  return node;
 }
 
 function leaderboardCard(view: ChromeView): HTMLElement {
@@ -208,7 +231,7 @@ function resultCard(run: RunState, progress: Progress, chainStatus: string): HTM
     el('p', 'stats', `Best floor ${progress.bestFloor} / ${MAX_FLOOR}  ·  Best relics ${progress.bestRelics}`)
   );
   if (chainStatus) card.append(el('p', 'chain', chainStatus));
-  card.append(button('Play again', 'confirm', 'btn btn-primary'));
+  card.append(button('Title screen', 'confirm', 'btn btn-primary'));
   return card;
 }
 
