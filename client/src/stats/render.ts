@@ -27,16 +27,18 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function expertAccount(address: string): string {
-  return `https://stellar.expert/explorer/testnet/account/${address}`;
+const STELLAR_VIEW = 'https://stellarview.acachete.xyz/en/testnet';
+
+function viewAccount(address: string): string {
+  return `${STELLAR_VIEW}/account/${encodeURIComponent(address)}`;
 }
 
-function expertTx(hash: string): string {
-  return `https://stellar.expert/explorer/testnet/tx/${hash}`;
+function viewTx(hash: string): string {
+  return `${STELLAR_VIEW}/tx/${encodeURIComponent(hash)}`;
 }
 
-function expertContract(): string {
-  return `https://stellar.expert/explorer/testnet/contract/${STELLAR_CONFIG.contractId}`;
+function viewContract(): string {
+  return `${STELLAR_VIEW}/contract/${encodeURIComponent(STELLAR_CONFIG.contractId)}`;
 }
 
 function externalLink(href: string, label: string): HTMLAnchorElement {
@@ -119,7 +121,7 @@ function playerCard(player: PlayerMark): HTMLElement {
   );
   const actions = el('div', 'player-actions');
   actions.append(copyButton('Copy address', player.address));
-  actions.append(externalLink(expertAccount(player.address), 'Stellar Expert'));
+  actions.append(externalLink(viewAccount(player.address), 'Stellar View'));
   card.append(actions);
   return card;
 }
@@ -130,7 +132,7 @@ function runCard(run: RecordedRun): HTMLElement {
   const when = Number.isFinite(parsed) ? `${WHEN.format(parsed)} UTC` : run.at;
   card.append(el('p', 'player-meta', `${when}  ·  Floor ${run.floorReached}  ·  Relics kept ${run.relicsKept}`));
   card.append(el('p', 'address', run.address));
-  card.append(externalLink(expertTx(run.txHash), 'Transaction'));
+  card.append(externalLink(viewTx(run.txHash), 'Transaction'));
   return card;
 }
 
@@ -220,7 +222,7 @@ export function renderSummary(root: HTMLElement, summary: TractionSummary): void
 
   const fine = el('p', 'note');
   fine.append('Stored by ');
-  fine.append(externalLink(expertContract(), STELLAR_CONFIG.contractId));
+  fine.append(externalLink(viewContract(), STELLAR_CONFIG.contractId));
   fine.append(
     '. The contract does not replay the dungeon. A floor or a relic count is the result that address submitted. A death banks no relics. The relic figure is the most that address has banked on any recorded run.'
   );
