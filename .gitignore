@@ -4,3 +4,8 @@ dist/
 .env.*
 *.log
 target/
+
+# The client is installed with Bun. Do not commit lockfiles from other managers.
+client/package-lock.json
+client/yarn.lock
+client/pnpm-lock.yaml
