@@ -1,0 +1,51 @@
+name: contract
+
+on:
+  pull_request:
+    paths:
+      - contracts/**
+      - .github/workflows/contract.yml
+  push:
+    branches: [main]
+    paths:
+      - contracts/**
+      - .github/workflows/contract.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          targets: wasm32v1-none
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-${{ runner.os }}-1.97.1-${{ hashFiles('contracts/deepmark-contract/Cargo.lock') }}
+      - name: Test
+        working-directory: contracts/deepmark-contract
+        run: cargo test
+      - name: Install Stellar CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL -o stellar.tar.gz https://github.com/stellar/stellar-cli/releases/download/v28.1.0/stellar-cli-28.1.0-x86_64-unknown-linux-gnu.tar.gz
+          echo "c1680deee94301d33ada7a17f98411e642a4248c727afbd2e43050d345746462  stellar.tar.gz" | sha256sum -c
+          tar -xzf stellar.tar.gz
+          mkdir -p "$HOME/.local/bin"
+          mv stellar "$HOME/.local/bin/stellar"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Build contract
+        working-directory: contracts/deepmark-contract
+        run: stellar contract build

@@ -29,3 +29,7 @@ stellar contract build
 ```
 
 Deployed to testnet as `deepmark` (see `stellar contract deploy` in the repo history for the exact command).
+
+## Checks
+
+GitHub Actions runs the client commands when `client/` changes, and the contract commands when `contracts/` changes. A change to either workflow file runs that workflow. The client commands are `bun run typecheck` and `bun run build`. The contract commands are `cargo test` and `stellar contract build`.
