@@ -11,7 +11,9 @@ import {
 } from './game/state';
 import { loadProgress, type Progress } from './game/progress';
 import { onAction, type Action } from './input/keyboard';
-import { drawLeaderboard, drawRun, drawTitle, type LeaderboardRow } from './render/canvas';
+import { drawWorld, face } from './render/canvas';
+import { syncChrome, type LeaderboardRow } from './render/chrome';
+import './styles.css';
 import { spawnPopup, triggerShake } from './render/effects';
 import {
   sfxDead,
@@ -27,8 +29,9 @@ import { getPlayerKeypair } from './stellar/account';
 import { fetchLeaderboard, fetchOnchainRecord, submitRunResult, type PlayerRecord } from './stellar/contract';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
-const ctx = canvas.getContext('2d');
-if (!ctx) throw new Error('Canvas 2D context unavailable');
+const context = canvas.getContext('2d');
+if (!context) throw new Error('Canvas 2D context unavailable');
+const ctx: CanvasRenderingContext2D = context;
 
 let run: RunState | null = null;
 let progress: Progress = loadProgress();
@@ -168,20 +171,31 @@ onAction((action) => {
     if (action === 'cancel') chooseExtract(run);
   } else {
     const dir = DIRS[action];
-    if (dir) tryMove(run, dir[0], dir[1]);
+    if (dir) {
+      if (dir[0] !== 0) face(dir[0] < 0 ? -1 : 1);
+      tryMove(run, dir[0], dir[1]);
+    }
   }
 
   for (const event of drainEvents(run)) handleEvent(event);
 });
 
 function frame(): void {
-  if (showLeaderboard) {
-    drawLeaderboard(ctx!, leaderboardRows, leaderboardLoading, playerAddress);
-  } else if (!run) {
-    drawTitle(ctx!, progress, onchainSummary());
-  } else {
-    drawRun(ctx!, run, progress, chainStatus);
+  if (run && !showLeaderboard && run.mode !== 'result') drawWorld(ctx, run);
+  else {
+    ctx.fillStyle = '#07080e';
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
+  syncChrome({
+    showLeaderboard,
+    leaderboardLoading,
+    leaderboardRows,
+    playerAddress,
+    run,
+    progress,
+    onchainSummary: onchainSummary(),
+    chainStatus,
+  });
   requestAnimationFrame(frame);
 }
 

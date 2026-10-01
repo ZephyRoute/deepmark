@@ -2,39 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Deepmark is a turn-based dungeon crawler. Bank your relics or push deeper, and leave a verifiable mark on Stellar." />
+  <meta name="theme-color" content="#07080e" />
   <title>Deepmark</title>
-  <style>
-    html, body {
-      margin: 0;
-      height: 100%;
-      background: #0b0d12;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: ui-monospace, Menlo, Consolas, monospace;
-    }
-    #app {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-    canvas {
-      image-rendering: pixelated;
-      border: 2px solid #2a2f3a;
-      background: #14171f;
-    }
-    #hint {
-      color: #6b7280;
-      font-size: 13px;
-    }
-  </style>
 </head>
 <body>
   <div id="app">
-    <canvas id="game" width="832" height="720"></canvas>
-    <div id="hint">WASD / arrows to move. Enter: attack / descend. Esc: retreat / extract. L: leaderboard.</div>
+    <header class="topbar">
+      <p class="brand">Deepmark</p>
+      <p id="floor-label" class="floor-label"></p>
+    </header>
+    <main class="stage-wrap">
+      <div class="stage">
+        <canvas id="game" width="832" height="576">Deepmark needs a canvas-capable browser.</canvas>
+        <section id="overlay" class="overlay" hidden></section>
+      </div>
+    </main>
+    <section id="hud" class="hud" hidden>
+      <div class="hud-stats">
+        <span id="hud-hp"></span>
+        <span id="hud-relics"></span>
+        <span id="hud-score"></span>
+      </div>
+      <p id="hud-log" class="hud-log"></p>
+    </section>
+    <nav class="touch" aria-label="Touch controls">
+      <div class="pad">
+        <button type="button" class="btn pad-btn pad-up" data-action="up" aria-label="Move up">↑</button>
+        <button type="button" class="btn pad-btn pad-left" data-action="left" aria-label="Move left">←</button>
+        <button type="button" class="btn pad-btn pad-down" data-action="down" aria-label="Move down">↓</button>
+        <button type="button" class="btn pad-btn pad-right" data-action="right" aria-label="Move right">→</button>
+      </div>
+      <div class="touch-actions">
+        <button type="button" class="btn btn-primary" data-action="confirm">Act</button>
+        <button type="button" class="btn" data-action="cancel">Back</button>
+      </div>
+    </nav>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
