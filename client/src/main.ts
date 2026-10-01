@@ -26,6 +26,7 @@ import {
   sfxHitPlayer,
   sfxRelic,
 } from './render/audio';
+import { loadHero, saveHero, type HeroId } from './game/heroes';
 import { getPlayerKeypair } from './stellar/account';
 import { fetchLeaderboard, fetchOnchainRecord, submitRunResult, type PlayerRecord } from './stellar/contract';
 
@@ -40,6 +41,7 @@ let chainStatus = '';
 let onchainRecord: PlayerRecord | null = null;
 let playerAddress = '';
 
+let heroId: HeroId = loadHero();
 let showLeaderboard = false;
 let leaderboardLoading = false;
 let leaderboardRows: LeaderboardRow[] | null = null;
@@ -157,9 +159,15 @@ onAction((action) => {
   }
 
   if (!run) {
+    if (action === 'pickLantern' || action === 'left') heroId = 'lantern';
+    if (action === 'pickCinder' || action === 'right') heroId = 'cinder';
+    if (action === 'pickLantern' || action === 'pickCinder' || action === 'left' || action === 'right') {
+      saveHero(heroId);
+    }
     if (action === 'confirm') {
+      saveHero(heroId);
       resetMotion();
-      run = newRun();
+      run = newRun(heroId);
     }
     if (action === 'leaderboard') void openLeaderboard();
     return;
@@ -168,7 +176,7 @@ onAction((action) => {
   if (run.mode === 'result') {
     if (action === 'confirm') {
       resetMotion();
-      run = newRun();
+      run = null;
       chainStatus = '';
     }
     return;
@@ -206,6 +214,7 @@ function frame(): void {
     progress,
     onchainSummary: onchainSummary(),
     chainStatus,
+    heroId,
   });
   requestAnimationFrame(frame);
 }

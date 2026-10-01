@@ -7,23 +7,22 @@ export interface ExchangeResult {
   playerDied: boolean;
 }
 
-const PLAYER_DMG_MIN = 2;
-const PLAYER_DMG_MAX = 4;
-
 /**
- * One full round: player strikes first, then the enemy strikes back if it
- * survived. This is the exact resolution the Phase 3 Soroban contract will
- * reproduce deterministically from the same seed, so it stays pure and
- * free of any rendering, audio or DOM concerns.
+ * One full round: the player strikes first, then the enemy strikes back if it
+ * survived. Damage ranges come from the chosen delver and the enemy archetype.
+ * The function stays pure so the same seed and the same ranges always resolve
+ * the same exchange.
  */
 export function resolveExchange(
   rng: Rng,
   playerHp: number,
   enemyHp: number,
   enemyDmgMin: number,
-  enemyDmgMax: number
+  enemyDmgMax: number,
+  playerDmgMin: number,
+  playerDmgMax: number
 ): ExchangeResult {
-  const playerDamageDealt = randInt(rng, PLAYER_DMG_MIN, PLAYER_DMG_MAX);
+  const playerDamageDealt = randInt(rng, playerDmgMin, playerDmgMax);
   const enemyHpAfter = enemyHp - playerDamageDealt;
   const enemyDied = enemyHpAfter <= 0;
 

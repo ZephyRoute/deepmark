@@ -1,4 +1,5 @@
 import { GRID_WIDTH, GRID_HEIGHT, TILE_SIZE } from '../game/floor';
+import type { HeroId } from '../game/heroes';
 import type { RelicKind } from '../game/floor';
 import type { RunState } from '../game/state';
 import { drawPopups, getShakeOffset } from './effects';
@@ -42,6 +43,7 @@ const art = {
   stairs2: loadArt('stairs-2.jpg'),
   stairs3: loadArt('stairs-3.jpg'),
   player: loadArt('player.png'),
+  cinder: loadArt('cinder.png'),
   playerWalkA: loadArt('player-walk-a.png'),
   playerWalkB: loadArt('player-walk-b.png'),
   playerAttack: loadArt('player-attack.png'),
@@ -161,18 +163,36 @@ function blitCell(
   );
 }
 
+function playerFrames(heroId: HeroId): {
+  idle: HTMLImageElement;
+  walkA: HTMLImageElement;
+  walkB: HTMLImageElement;
+  attack: HTMLImageElement;
+} {
+  if (heroId === 'cinder') {
+    return { idle: art.cinder, walkA: art.cinder, walkB: art.cinder, attack: art.cinder };
+  }
+  return {
+    idle: art.player,
+    walkA: art.playerWalkA,
+    walkB: art.playerWalkB,
+    attack: art.playerAttack,
+  };
+}
+
 function drawFooted(
   ctx: CanvasRenderingContext2D,
   image: HTMLImageElement,
   cx: number,
   cy: number,
   size: number,
-  flip: boolean
+  flip: boolean,
+  squat = 1
 ): void {
   const feet = cy + TILE_SIZE * 0.3;
   ctx.save();
   ctx.translate(cx, feet);
-  ctx.scale(flip ? -1 : 1, 1);
+  ctx.scale(flip ? -1 : 1, squat);
   ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
   ctx.beginPath();
   ctx.ellipse(0, -2, size * 0.2, 5, 0, 0, Math.PI * 2);
@@ -262,17 +282,23 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
 
   const playerPose = sampleActor('player', run.player.x, run.player.y);
   const player = cell(playerPose.x, playerPose.y);
+  const sheet = playerFrames(run.heroId);
   const playerImage = pickFrame(
-    art.player,
-    art.playerWalkA,
-    art.playerWalkB,
-    art.playerAttack,
+    sheet.idle,
+    sheet.walkA,
+    sheet.walkB,
+    sheet.attack,
     playerPose.clip,
     playerPose.phase,
     false
   );
   const playerLunge = playerPose.clip === 'attack' ? Math.sin(playerPose.phase * Math.PI) * 12 * facing : 0;
-  if (ready(playerImage)) drawFooted(ctx, playerImage, player.cx + playerLunge, player.cy, ACTOR_SIZE.player, facing < 0);
+  const squat = run.heroId === 'cinder' && playerPose.clip === 'walk'
+    ? 1 - Math.sin(playerPose.phase * Math.PI) * 0.08
+    : 1;
+  if (ready(playerImage)) {
+    drawFooted(ctx, playerImage, player.cx + playerLunge, player.cy, ACTOR_SIZE.player, facing < 0, squat);
+  }
   else {
     ctx.fillStyle = '#4fc3f7';
     ctx.beginPath();

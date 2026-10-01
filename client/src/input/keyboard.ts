@@ -1,4 +1,13 @@
-export type Action = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'cancel' | 'leaderboard';
+export type Action =
+  | 'up'
+  | 'down'
+  | 'left'
+  | 'right'
+  | 'confirm'
+  | 'cancel'
+  | 'leaderboard'
+  | 'pickLantern'
+  | 'pickCinder';
 
 const KEY_MAP: Record<string, Action> = {
   ArrowUp: 'up',
@@ -15,7 +24,17 @@ const KEY_MAP: Record<string, Action> = {
   KeyL: 'leaderboard',
 };
 
-const ACTIONS: readonly Action[] = ['up', 'down', 'left', 'right', 'confirm', 'cancel', 'leaderboard'];
+const ACTIONS: readonly Action[] = [
+  'up',
+  'down',
+  'left',
+  'right',
+  'confirm',
+  'cancel',
+  'leaderboard',
+  'pickLantern',
+  'pickCinder',
+];
 
 function isAction(value: string | undefined): value is Action {
   return ACTIONS.some((action) => action === value);

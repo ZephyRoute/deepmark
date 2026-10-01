@@ -120,8 +120,10 @@ body:has(#overlay:not([hidden])) .touch {
 }
 
 .title-screen {
-  height: 100%;
+  min-height: 100%;
+  height: auto;
   width: 100%;
+  align-self: end;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -166,6 +168,70 @@ body:has(#overlay:not([hidden])) .touch {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 6px;
+}
+
+.hero-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hero-pick {
+  flex: 1 1 148px;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(8, 10, 16, 0.55);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hero-pick.is-selected {
+  border-color: rgba(126, 240, 224, 0.7);
+  background: rgba(20, 48, 46, 0.72);
+}
+
+.hero-pick:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.hero-portrait {
+  width: 52px;
+  height: 64px;
+  object-fit: contain;
+  object-position: center bottom;
+  flex: 0 0 auto;
+}
+
+.hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hero-name {
+  font-family: Palatino, "Iowan Old Style", Georgia, serif;
+  font-size: 1.05rem;
+}
+
+.hero-blurb {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+
+@media (max-width: 700px) {
+  .title { font-size: clamp(2.2rem, 12vw, 3.4rem); }
+  .hero-pick { min-height: 64px; padding: 6px 8px; }
+  .hero-portrait { width: 44px; height: 56px; }
+  .title-screen .hint { display: none; }
 }
 
 .btn {

@@ -1,6 +1,7 @@
 import { resolveExchange } from './combat';
 import { ENEMIES, type EnemyKind } from './enemies';
 import { buildFloor, isWalkable, MAX_FLOOR, type FloorLayout, type RelicKind } from './floor';
+import { HEROES, type HeroId } from './heroes';
 import { recordRun } from './progress';
 import { mulberry32, freshSeed, type Rng } from './rng';
 
@@ -36,6 +37,7 @@ export type GameEvent =
 
 export interface RunState {
   mode: Mode;
+  heroId: HeroId;
   seed: number;
   rng: Rng;
   floorNumber: number;
@@ -52,7 +54,6 @@ export interface RunState {
   events: GameEvent[];
 }
 
-const PLAYER_MAX_HP = 10;
 const MAX_LOG_LINES = 4;
 const RELIC_VALUE: Record<RelicKind, number> = { common: 1, rare: 2, core: 3 };
 
@@ -70,16 +71,18 @@ function fromLayout(layout: FloorLayout): { enemies: EnemyState[]; relics: Relic
   };
 }
 
-export function newRun(seed: number = freshSeed()): RunState {
+export function newRun(heroId: HeroId = 'lantern', seed: number = freshSeed()): RunState {
+  const hero = HEROES[heroId];
   const layout = buildFloor(1);
   const { enemies, relics } = fromLayout(layout);
   return {
     mode: 'explore',
+    heroId,
     seed,
     rng: mulberry32(seed),
     floorNumber: 1,
     layout,
-    player: { ...layout.playerStart, hp: PLAYER_MAX_HP, maxHp: PLAYER_MAX_HP },
+    player: { ...layout.playerStart, hp: hero.maxHp, maxHp: hero.maxHp },
     enemies,
     activeEnemyIndex: null,
     relics,
@@ -87,7 +90,7 @@ export function newRun(seed: number = freshSeed()): RunState {
     scoreThisRun: 0,
     resultKind: null,
     newBest: false,
-    log: ['You enter the dungeon. Find the stairs, or find your death.'],
+    log: [`${hero.name} enters the dungeon. Find the stairs, or find your death.`],
     events: [],
   };
 }
@@ -168,7 +171,16 @@ export function attack(state: RunState): void {
   const enemy = state.enemies[state.activeEnemyIndex];
   if (!enemy) return;
   const archetype = ENEMIES[enemy.kind];
-  const result = resolveExchange(state.rng, state.player.hp, enemy.hp, archetype.dmgMin, archetype.dmgMax);
+  const hero = HEROES[state.heroId];
+  const result = resolveExchange(
+    state.rng,
+    state.player.hp,
+    enemy.hp,
+    archetype.dmgMin,
+    archetype.dmgMax,
+    hero.dmgMin,
+    hero.dmgMax
+  );
 
   enemy.hp = Math.max(0, enemy.hp - result.playerDamageDealt);
   pushLog(state, `You strike the ${archetype.name} for ${result.playerDamageDealt}.`);
