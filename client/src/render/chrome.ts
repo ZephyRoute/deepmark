@@ -11,14 +11,25 @@ export interface LeaderboardRow {
   totalRuns: number;
 }
 
+export type ChainRead = 'loading' | 'ready' | 'unavailable';
+
+export interface OnchainSnapshot {
+  bestFloor: number;
+  bestRelics: number;
+  totalRuns: number;
+}
+
 export interface ChromeView {
   showLeaderboard: boolean;
+  showStats: boolean;
   leaderboardLoading: boolean;
   leaderboardRows: LeaderboardRow[] | null;
   playerAddress: string;
   run: RunState | null;
   progress: Progress;
   onchainSummary: string;
+  onchain: OnchainSnapshot | null;
+  chainRead: ChainRead;
   chainStatus: string;
   heroId: HeroId;
 }
@@ -68,6 +79,12 @@ function renderOverlay(view: ChromeView): void {
     return;
   }
 
+  if (view.showStats) {
+    overlay.hidden = false;
+    overlay.append(statsCard(view));
+    return;
+  }
+
   if (!view.run) {
     overlay.hidden = false;
     overlay.append(titleCard(view));
@@ -98,6 +115,13 @@ function overlaySignature(view: ChromeView): string {
       .join('|');
     return `board:${view.leaderboardLoading}:${rows ?? ''}:${view.playerAddress}`;
   }
+  if (view.showStats) {
+    const progress = view.progress;
+    const chain = view.onchain
+      ? `${view.onchain.bestFloor}:${view.onchain.bestRelics}:${view.onchain.totalRuns}`
+      : '';
+    return `stats:${view.chainRead}:${chain}:${view.playerAddress}:${progress.runsPlayed}:${progress.extractions}:${progress.deaths}:${progress.bestFloor}:${progress.bestRelics}:${progress.bestScore}:${progress.relicsKept}:${progress.lanternRuns}:${progress.cinderRuns}`;
+  }
   if (!view.run) {
     return `title:${view.heroId}:${view.progress.runsPlayed}:${view.progress.bestFloor}:${view.progress.bestRelics}:${view.onchainSummary}`;
   }
@@ -125,6 +149,7 @@ function titleCard(view: ChromeView): HTMLElement {
   card.append(picks);
   const actions = el('div', 'title-actions');
   actions.append(button('Descend', 'confirm', 'btn btn-primary'));
+  actions.append(button('Stats', 'stats', 'btn'));
   actions.append(button('Leaderboard', 'leaderboard', 'btn'));
   card.append(actions);
 
@@ -138,7 +163,7 @@ function titleCard(view: ChromeView): HTMLElement {
     );
   }
   if (view.onchainSummary) card.append(el('p', 'chain', view.onchainSummary));
-  card.append(el('p', 'hint', 'Left and right choose a delver. Enter descends. WASD moves. Esc retreats or extracts.'));
+  card.append(el('p', 'hint', 'Left and right choose a delver. Enter descends. M opens your record. WASD moves. Esc retreats or extracts.'));
   return card;
 }
 
@@ -195,6 +220,94 @@ function leaderboardCard(view: ChromeView): HTMLElement {
   return card;
 }
 
+function metric(value: string, label: string): HTMLElement {
+  const node = el('div', 'metric');
+  node.append(el('span', 'metric-value', value));
+  node.append(el('span', 'metric-label', label));
+  return node;
+}
+
+function metricGrid(tiles: HTMLElement[]): HTMLElement {
+  const grid = el('div', 'metric-grid');
+  for (const tile of tiles) grid.append(tile);
+  return grid;
+}
+
+function statsCard(view: ChromeView): HTMLElement {
+  const card = el('div', 'panel panel-scroll panel-wide');
+  card.append(el('h2', 'panel-title', 'Your record'));
+  card.append(el('p', 'panel-sub', 'This browser keeps the detail. Stellar keeps the mark anyone can read.'));
+
+  const local = el('section', 'metric-group');
+  local.append(el('h3', 'metric-heading', 'This browser'));
+  const progress = view.progress;
+  if (progress.runsPlayed === 0) {
+    local.append(el('p', 'panel-body', 'No finished run in this browser yet.'));
+  } else {
+    const outcomes = progress.extractions + progress.deaths;
+    const delvers = progress.lanternRuns + progress.cinderRuns;
+    const partial = outcomes < progress.runsPlayed || delvers < progress.runsPlayed;
+    const hasNewDetail = outcomes + delvers > 0;
+    local.append(
+      metricGrid(
+        hasNewDetail
+          ? [
+              metric(String(progress.runsPlayed), 'Runs'),
+              metric(String(progress.extractions), 'Extracted'),
+              metric(String(progress.deaths), 'Lost'),
+              metric(`${progress.bestFloor} / ${MAX_FLOOR}`, 'Best floor'),
+              metric(String(progress.bestRelics), 'Best relics'),
+              metric(String(progress.relicsKept), 'Relics banked'),
+              metric(String(progress.bestScore), 'Best score'),
+              metric(String(progress.lanternRuns), 'Lantern'),
+              metric(String(progress.cinderRuns), 'Cinder'),
+            ]
+          : [
+              metric(String(progress.runsPlayed), 'Runs'),
+              metric(`${progress.bestFloor} / ${MAX_FLOOR}`, 'Best floor'),
+              metric(String(progress.bestRelics), 'Best relics'),
+            ]
+      )
+    );
+    if (partial) {
+      local.append(
+        el(
+          'p',
+          'panel-sub',
+          'Wins, losses, score, relics banked, and delver counts include only runs finished after this page shipped. Earlier runs still count toward the total, best floor, and best relics.'
+        )
+      );
+    }
+  }
+  card.append(local);
+
+  const chain = el('section', 'metric-group');
+  chain.append(el('h3', 'metric-heading', 'Stellar testnet'));
+  if (view.playerAddress) {
+    chain.append(el('p', 'panel-sub', `You ${shortenAddress(view.playerAddress)}`));
+  }
+  if (view.chainRead === 'loading') {
+    chain.append(el('p', 'panel-body', 'Reading the Stellar record...'));
+  } else if (view.chainRead === 'unavailable') {
+    chain.append(el('p', 'panel-body', 'Stellar could not be reached from this browser.'));
+  } else if (!view.onchain) {
+    chain.append(el('p', 'panel-body', 'No run recorded for you on Stellar yet.'));
+  } else {
+    chain.append(el('p', 'panel-sub', 'Best floor, best relics, and how many runs were recorded.'));
+    chain.append(
+      metricGrid([
+        metric(`${view.onchain.bestFloor} / ${MAX_FLOOR}`, 'Best floor'),
+        metric(String(view.onchain.bestRelics), 'Best relics'),
+        metric(String(view.onchain.totalRuns), 'Runs'),
+      ])
+    );
+  }
+  card.append(chain);
+
+  card.append(button('Back', 'cancel', 'btn'));
+  return card;
+}
+
 function combatCard(run: RunState): HTMLElement {
   const enemy = run.activeEnemyIndex !== null ? run.enemies[run.activeEnemyIndex] : undefined;
   const name = enemy ? ENEMIES[enemy.kind].name : 'Something';
@@ -236,7 +349,7 @@ function resultCard(run: RunState, progress: Progress, chainStatus: string): HTM
 }
 
 export function syncChrome(view: ChromeView): void {
-  const playing = Boolean(view.run) && !view.showLeaderboard && view.run?.mode !== 'result';
+  const playing = Boolean(view.run) && !view.showLeaderboard && !view.showStats && view.run?.mode !== 'result';
   const hud = document.getElementById('hud');
   if (hud) hud.hidden = !playing;
 
@@ -253,6 +366,8 @@ export function syncChrome(view: ChromeView): void {
     setText('hud-score', `Score ${view.run.scoreThisRun}`);
     const lastLine = view.run.log[view.run.log.length - 1] ?? '';
     setText('hud-log', lastLine);
+  } else if (view.showStats) {
+    setText('floor-label', 'Record');
   } else if (view.showLeaderboard) {
     setText('floor-label', 'Records');
   } else if (!view.run) {

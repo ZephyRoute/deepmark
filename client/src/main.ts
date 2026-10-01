@@ -13,7 +13,7 @@ import { loadProgress, type Progress } from './game/progress';
 import { onAction, type Action } from './input/keyboard';
 import { drawWorld, face } from './render/canvas';
 import { playAttack, resetMotion } from './render/motion';
-import { syncChrome, type LeaderboardRow } from './render/chrome';
+import { syncChrome, type ChainRead, type LeaderboardRow, type OnchainSnapshot } from './render/chrome';
 import './styles.css';
 import { spawnPopup, triggerShake } from './render/effects';
 import {
@@ -43,19 +43,35 @@ let playerAddress = '';
 
 let heroId: HeroId = loadHero();
 let showLeaderboard = false;
+let showStats = false;
 let leaderboardLoading = false;
 let leaderboardRows: LeaderboardRow[] | null = null;
+let chainRead: ChainRead = 'loading';
 
 getPlayerKeypair()
   .then(async (keypair) => {
     playerAddress = keypair.publicKey();
     try {
       onchainRecord = await fetchOnchainRecord(keypair);
+      chainRead = 'ready';
     } catch (err) {
+      chainRead = 'unavailable';
       console.warn('Deepmark: could not read the on-chain record yet', err);
     }
   })
-  .catch((err) => console.warn('Deepmark: could not set up a testnet account', err));
+  .catch((err) => {
+    chainRead = 'unavailable';
+    console.warn('Deepmark: could not set up a testnet account', err);
+  });
+
+function onchainSnapshot(): OnchainSnapshot | null {
+  if (!onchainRecord) return null;
+  return {
+    bestFloor: onchainRecord.best_floor,
+    bestRelics: onchainRecord.best_relics,
+    totalRuns: onchainRecord.total_runs,
+  };
+}
 
 async function openLeaderboard(): Promise<void> {
   showLeaderboard = true;
@@ -89,6 +105,7 @@ async function submitToChain(floorReached: number, relicsKept: number): Promise<
     const keypair = await getPlayerKeypair();
     const { hash, record } = await submitRunResult(keypair, floorReached, relicsKept);
     onchainRecord = record;
+    chainRead = 'ready';
     chainStatus = hash ? `Saved on-chain (tx ${hash.slice(0, 8)}...)` : 'Saved on-chain';
     leaderboardRows = null;
   } catch (err) {
@@ -153,6 +170,11 @@ function handleEvent(event: GameEvent): void {
 }
 
 onAction((action) => {
+  if (showStats) {
+    if (action === 'stats' || action === 'cancel') showStats = false;
+    return;
+  }
+
   if (showLeaderboard) {
     if (action === 'leaderboard' || action === 'cancel') showLeaderboard = false;
     return;
@@ -169,6 +191,7 @@ onAction((action) => {
       resetMotion();
       run = newRun(heroId);
     }
+    if (action === 'stats') showStats = true;
     if (action === 'leaderboard') void openLeaderboard();
     return;
   }
@@ -200,19 +223,22 @@ onAction((action) => {
 });
 
 function frame(): void {
-  if (run && !showLeaderboard && run.mode !== 'result') drawWorld(ctx, run);
+  if (run && !showLeaderboard && !showStats && run.mode !== 'result') drawWorld(ctx, run);
   else {
     ctx.fillStyle = '#07080e';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
   syncChrome({
     showLeaderboard,
+    showStats,
     leaderboardLoading,
     leaderboardRows,
     playerAddress,
     run,
     progress,
     onchainSummary: onchainSummary(),
+    onchain: onchainSnapshot(),
+    chainRead,
     chainStatus,
     heroId,
   });
