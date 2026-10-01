@@ -8,11 +8,15 @@ Status: Phase 3, live on Stellar testnet. Every finished run records its result 
 
 ## Run it locally
 
-```
+The client uses [Bun](https://bun.com) 1.3.14 or newer as its package manager.
+
+```bash
 cd client
-npm install
-npm run dev
+bun install
+bun run dev
 ```
+
+`bun run typecheck` checks the TypeScript project. `bun run build` typechecks and writes the production bundle to `client/dist`.
 
 WASD or arrow keys to move, Enter to confirm/attack/descend, Esc to retreat/extract. A Stellar testnet account is created and funded automatically on first run; no wallet or extension needed.
 
