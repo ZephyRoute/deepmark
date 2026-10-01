@@ -128,7 +128,7 @@ body:has(#overlay:not([hidden])) .touch {
   flex-direction: column;
   justify-content: flex-end;
   gap: 8px;
-  padding: 22px 20px 18px;
+  padding: 22px 20px calc(18px + env(safe-area-inset-bottom));
   background:
     linear-gradient(180deg, rgba(7, 8, 14, 0.05) 10%, rgba(7, 8, 14, 0.82) 72%),
     url("/art/title.jpg") center / cover no-repeat;
