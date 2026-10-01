@@ -223,7 +223,8 @@ export function syncChrome(view: ChromeView): void {
   }
 
   if (playing && view.run) {
-    setText('floor-label', `Floor ${view.run.floorNumber} / ${MAX_FLOOR}`);
+    const floorName = ['', 'Reliquary', 'Drowned chapel', 'Obsidian crypt'][view.run.floorNumber] ?? '';
+    setText('floor-label', `Floor ${view.run.floorNumber} / ${MAX_FLOOR}  ${floorName}`);
     setText('hud-hp', `HP ${view.run.player.hp}/${view.run.player.maxHp}`);
     setText('hud-relics', `Relics ${view.run.relicsThisRun}`);
     setText('hud-score', `Score ${view.run.scoreThisRun}`);

@@ -2,6 +2,7 @@ import { GRID_WIDTH, GRID_HEIGHT, TILE_SIZE } from '../game/floor';
 import type { RelicKind } from '../game/floor';
 import type { RunState } from '../game/state';
 import { drawPopups, getShakeOffset } from './effects';
+import { sampleActor, type Clip } from './motion';
 
 const COLOR_BG = '#07080e';
 const COLOR_HPBACK = '#1c2230';
@@ -32,17 +33,77 @@ function loadArt(file: string): HTMLImageElement {
 
 const art = {
   floor: loadArt('floor.jpg'),
+  floor2: loadArt('floor-2.jpg'),
+  floor3: loadArt('floor-3.jpg'),
   wall: loadArt('wall.jpg'),
+  wall2: loadArt('wall-2.jpg'),
+  wall3: loadArt('wall-3.jpg'),
   stairs: loadArt('stairs.jpg'),
+  stairs2: loadArt('stairs-2.jpg'),
+  stairs3: loadArt('stairs-3.jpg'),
   player: loadArt('player.png'),
+  playerWalkA: loadArt('player-walk-a.png'),
+  playerWalkB: loadArt('player-walk-b.png'),
+  playerAttack: loadArt('player-attack.png'),
   warden: loadArt('warden.png'),
+  wardenWalk: loadArt('warden-walk.png'),
+  wardenAttack: loadArt('warden-attack.png'),
   skitter: loadArt('skitter.png'),
+  skitterWalk: loadArt('skitter-walk.png'),
+  skitterAttack: loadArt('skitter-attack.png'),
   adept: loadArt('adept.png'),
+  adeptWalk: loadArt('adept-walk.png'),
+  adeptAttack: loadArt('adept-attack.png'),
   wardenPrime: loadArt('warden-prime.png'),
+  wardenPrimeWalk: loadArt('warden-prime-walk.png'),
+  wardenPrimeAttack: loadArt('warden-prime-attack.png'),
   common: loadArt('relic-common.png'),
   rare: loadArt('relic-rare.png'),
   core: loadArt('relic-core.png'),
 };
+
+function biome(floor: number): { floor: HTMLImageElement; wall: HTMLImageElement; stairs: HTMLImageElement } {
+  if (floor >= 3) return { floor: art.floor3, wall: art.wall3, stairs: art.stairs3 };
+  if (floor === 2) return { floor: art.floor2, wall: art.wall2, stairs: art.stairs2 };
+  return { floor: art.floor, wall: art.wall, stairs: art.stairs };
+}
+
+function pickFrame(idle: HTMLImageElement, walkA: HTMLImageElement, walkB: HTMLImageElement, attack: HTMLImageElement, clip: Clip, phase: number, shift: boolean): HTMLImageElement {
+  if (clip === 'attack') {
+    if (ready(attack)) return attack;
+    if (ready(walkA)) return walkA;
+  }
+  const stepping = clip === 'walk' || (shift && Math.floor(performance.now() / 420) % 2 === 1);
+  if (stepping) {
+    const index = clip === 'walk' ? Math.floor(phase * 4) : 1;
+    if (index === 3 && ready(walkB)) return walkB;
+    if (index !== 0 && index !== 2 && ready(walkA)) return walkA;
+  }
+  return idle;
+}
+
+function enemySheet(kind: 'warden' | 'skitter' | 'adept' | 'wardenPrime'): {
+  idle: HTMLImageElement;
+  walkA: HTMLImageElement;
+  walkB: HTMLImageElement;
+  attack: HTMLImageElement;
+} {
+  if (kind === 'skitter') {
+    return { idle: art.skitter, walkA: art.skitterWalk, walkB: art.skitterWalk, attack: art.skitterAttack };
+  }
+  if (kind === 'adept') {
+    return { idle: art.adept, walkA: art.adeptWalk, walkB: art.adeptWalk, attack: art.adeptAttack };
+  }
+  if (kind === 'wardenPrime') {
+    return {
+      idle: art.wardenPrime,
+      walkA: art.wardenPrimeWalk,
+      walkB: art.wardenPrimeWalk,
+      attack: art.wardenPrimeAttack,
+    };
+  }
+  return { idle: art.warden, walkA: art.wardenWalk, walkB: art.wardenWalk, attack: art.wardenAttack };
+}
 
 function ready(image: HTMLImageElement): boolean {
   return image.complete && image.naturalWidth > 0;
@@ -148,13 +209,14 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
   ctx.save();
   ctx.translate(shakeX, shakeY);
 
+  const theme = biome(run.floorNumber);
   for (let y = 0; y < GRID_HEIGHT; y++) {
     for (let x = 0; x < GRID_WIDTH; x++) {
       const tile = run.layout.grid[y]?.[x];
       const dx = offsetX + x * TILE_SIZE;
       const dy = y * TILE_SIZE;
       const wall = tile === 'wall';
-      const texture = wall ? art.wall : art.floor;
+      const texture = wall ? theme.wall : theme.floor;
       if (ready(texture)) blitCell(ctx, texture, x, y, dx, dy);
       else fillFallback(ctx, dx, dy, wall);
     }
@@ -168,8 +230,12 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
   });
 
   const stairs = cell(run.layout.stairsPos.x, run.layout.stairsPos.y);
-  if (ready(art.stairs)) {
-    ctx.drawImage(art.stairs, stairs.dx, stairs.dy, TILE_SIZE, TILE_SIZE);
+  if (ready(theme.stairs)) {
+    const image = theme.stairs;
+    const crop = image.width * 0.48;
+    const sx = (image.width - crop) / 2;
+    const sy = (image.height - crop) / 2;
+    ctx.drawImage(image, sx, sy, crop, crop, stairs.dx, stairs.dy, TILE_SIZE, TILE_SIZE);
   } else {
     ctx.fillStyle = '#66bb6a';
     ctx.fillRect(stairs.cx - 18, stairs.cy - 18, 36, 36);
@@ -183,16 +249,30 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
     if (ready(image)) drawCentered(ctx, image, cx, cy + bob, RELIC_SIZE[relic.kind]);
   }
 
-  for (const enemy of run.enemies) {
+  for (const [index, enemy] of run.enemies.entries()) {
     if (!enemy.alive) continue;
-    const { cx, cy } = cell(enemy.x, enemy.y);
-    const image = art[enemy.kind];
-    if (ready(image)) drawFooted(ctx, image, cx, cy, ACTOR_SIZE[enemy.kind], false);
-    drawBar(ctx, cx, cy - ACTOR_SIZE[enemy.kind] * 0.42, 36, enemy.hp / enemy.maxHp, 0.34);
+    const pose = sampleActor(`enemy-${index}`, enemy.x, enemy.y);
+    const spot = cell(pose.x, pose.y);
+    const sheet = enemySheet(enemy.kind);
+    const image = pickFrame(sheet.idle, sheet.walkA, sheet.walkB, sheet.attack, pose.clip, pose.phase, true);
+    const lunge = pose.clip === 'attack' ? Math.sin(pose.phase * Math.PI) * 10 : 0;
+    if (ready(image)) drawFooted(ctx, image, spot.cx + lunge, spot.cy, ACTOR_SIZE[enemy.kind], false);
+    drawBar(ctx, spot.cx, spot.cy - ACTOR_SIZE[enemy.kind] * 0.42, 36, enemy.hp / enemy.maxHp, 0.34);
   }
 
-  const player = cell(run.player.x, run.player.y);
-  if (ready(art.player)) drawFooted(ctx, art.player, player.cx, player.cy, ACTOR_SIZE.player, facing < 0);
+  const playerPose = sampleActor('player', run.player.x, run.player.y);
+  const player = cell(playerPose.x, playerPose.y);
+  const playerImage = pickFrame(
+    art.player,
+    art.playerWalkA,
+    art.playerWalkB,
+    art.playerAttack,
+    playerPose.clip,
+    playerPose.phase,
+    false
+  );
+  const playerLunge = playerPose.clip === 'attack' ? Math.sin(playerPose.phase * Math.PI) * 12 * facing : 0;
+  if (ready(playerImage)) drawFooted(ctx, playerImage, player.cx + playerLunge, player.cy, ACTOR_SIZE.player, facing < 0);
   else {
     ctx.fillStyle = '#4fc3f7';
     ctx.beginPath();

@@ -12,6 +12,7 @@ import {
 import { loadProgress, type Progress } from './game/progress';
 import { onAction, type Action } from './input/keyboard';
 import { drawWorld, face } from './render/canvas';
+import { playAttack, resetMotion } from './render/motion';
 import { syncChrome, type LeaderboardRow } from './render/chrome';
 import './styles.css';
 import { spawnPopup, triggerShake } from './render/effects';
@@ -104,11 +105,16 @@ const DIRS: Partial<Record<Action, [number, number]>> = {
 function handleEvent(event: GameEvent): void {
   switch (event.type) {
     case 'enemyHit':
+      if (run) playAttack('player', run.player.x, run.player.y);
       spawnPopup(event.x, event.y, `-${event.amount}`, '#e5e7eb');
       sfxHitEnemy();
       triggerShake(100, 4);
       break;
     case 'playerHit':
+      if (run && run.activeEnemyIndex !== null) {
+        const enemy = run.enemies[run.activeEnemyIndex];
+        if (enemy) playAttack(`enemy-${run.activeEnemyIndex}`, enemy.x, enemy.y);
+      }
       spawnPopup(event.x, event.y, `-${event.amount}`, '#ef5350');
       sfxHitPlayer();
       triggerShake(150, 7);
@@ -125,6 +131,7 @@ function handleEvent(event: GameEvent): void {
       sfxFloorCleared();
       break;
     case 'descended':
+      resetMotion();
       sfxDescend();
       break;
     case 'extracted':
@@ -150,13 +157,17 @@ onAction((action) => {
   }
 
   if (!run) {
-    if (action === 'confirm') run = newRun();
+    if (action === 'confirm') {
+      resetMotion();
+      run = newRun();
+    }
     if (action === 'leaderboard') void openLeaderboard();
     return;
   }
 
   if (run.mode === 'result') {
     if (action === 'confirm') {
+      resetMotion();
       run = newRun();
       chainStatus = '';
     }
