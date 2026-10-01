@@ -18,7 +18,7 @@ bun run dev
 
 `bun run typecheck` checks the TypeScript project. `bun run build` typechecks and writes the production bundle to `client/dist`.
 
-WASD or arrow keys to move, Enter to confirm/attack/descend, Esc to retreat/extract. M opens your record: runs in this browser, and the best floor, relics, and run count stored for this address on Stellar testnet. On a narrow screen the board scales to the window and on-screen controls take over. A Stellar testnet account is created and funded automatically on first run; no wallet or extension needed.
+WASD or arrow keys to move, Enter to confirm/attack/descend, Esc to retreat/extract. M opens your record: runs in this browser, and the best floor, relics, and run count stored for this address on Stellar testnet. `/stats` is the public traction page: every address that has recorded a run, the run totals, and the best floors, read from the testnet contract. On a narrow screen the board scales to the window and on-screen controls take over. A Stellar testnet account is created and funded automatically on first run; no wallet or extension needed.
 
 ## Contract
 

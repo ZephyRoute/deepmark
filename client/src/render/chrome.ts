@@ -164,6 +164,9 @@ function titleCard(view: ChromeView): HTMLElement {
   }
   if (view.onchainSummary) card.append(el('p', 'chain', view.onchainSummary));
   card.append(el('p', 'hint', 'Left and right choose a delver. Enter descends. M opens your record. WASD moves. Esc retreats or extracts.'));
+  const network = el('a', 'quiet-link', 'All players');
+  network.href = '/stats';
+  card.append(network);
   return card;
 }
 

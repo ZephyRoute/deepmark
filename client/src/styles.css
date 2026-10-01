@@ -286,6 +286,21 @@ body:has(#overlay:not([hidden])) .touch {
 
 .chain { color: var(--cyan); }
 
+.quiet-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--cyan);
+  text-decoration: none;
+}
+
+.quiet-link:hover { text-decoration: underline; }
+
+.quiet-link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
 .panel-wide { width: min(100%, 560px); }
 
 .metric-group {
