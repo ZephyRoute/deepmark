@@ -35,6 +35,20 @@ function makeSigner(keypair: Keypair): NonNullable<contract.ClientOptions['signT
 
 const clients = new Map<string, Promise<contract.Client & DeepmarkContractApi>>();
 
+/** A read-only client. It does not sign and does not create an account. */
+export function readClient(): Promise<contract.Client & DeepmarkContractApi> {
+  let existing = clients.get('');
+  if (!existing) {
+    existing = contract.Client.from<DeepmarkContractApi>({
+      contractId: STELLAR_CONFIG.contractId,
+      rpcUrl: STELLAR_CONFIG.rpcUrl,
+      networkPassphrase: STELLAR_CONFIG.networkPassphrase,
+    });
+    clients.set('', existing);
+  }
+  return existing;
+}
+
 function getClient(keypair: Keypair) {
   const publicKey = keypair.publicKey();
   let existing = clients.get(publicKey);

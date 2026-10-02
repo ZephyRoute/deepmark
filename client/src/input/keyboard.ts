@@ -6,6 +6,7 @@ export type Action =
   | 'confirm'
   | 'cancel'
   | 'leaderboard'
+  | 'stats'
   | 'pickLantern'
   | 'pickCinder';
 
@@ -22,6 +23,7 @@ const KEY_MAP: Record<string, Action> = {
   Space: 'confirm',
   Escape: 'cancel',
   KeyL: 'leaderboard',
+  KeyM: 'stats',
 };
 
 const ACTIONS: readonly Action[] = [
@@ -32,6 +34,7 @@ const ACTIONS: readonly Action[] = [
   'confirm',
   'cancel',
   'leaderboard',
+  'stats',
   'pickLantern',
   'pickCinder',
 ];

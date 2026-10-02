@@ -128,7 +128,7 @@ body:has(#overlay:not([hidden])) .touch {
   flex-direction: column;
   justify-content: flex-end;
   gap: 8px;
-  padding: 22px 20px 18px;
+  padding: 22px 20px calc(18px + env(safe-area-inset-bottom));
   background:
     linear-gradient(180deg, rgba(7, 8, 14, 0.05) 10%, rgba(7, 8, 14, 0.82) 72%),
     url("/art/title.jpg") center / cover no-repeat;
@@ -285,6 +285,69 @@ body:has(#overlay:not([hidden])) .touch {
 }
 
 .chain { color: var(--cyan); }
+
+.quiet-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--cyan);
+  text-decoration: none;
+}
+
+.quiet-link:hover { text-decoration: underline; }
+
+.quiet-link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.panel-wide { width: min(100%, 560px); }
+
+.metric-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metric-heading {
+  margin: 0;
+  font-family: Palatino, "Iowan Old Style", Georgia, serif;
+  font-weight: 500;
+  font-size: 1.05rem;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.metric {
+  min-height: 64px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(8, 10, 16, 0.45);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.metric-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.15rem;
+}
+
+.metric-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 420px) {
+  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 .board-head, .board-row {
   display: grid;

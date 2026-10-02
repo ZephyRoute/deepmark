@@ -1,0 +1,220 @@
+:root {
+  color-scheme: dark;
+  --bg: #07080e;
+  --bg-raise: rgba(12, 16, 26, 0.82);
+  --line: rgba(232, 224, 208, 0.16);
+  --text: #f4efe6;
+  --muted: #a3988c;
+  --cyan: #7ef0e0;
+  --cyan-deep: #143f3c;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(900px 420px at 50% -10%, rgba(126, 240, 224, 0.08), transparent 60%),
+    var(--bg);
+  color: var(--text);
+}
+
+body { min-height: 100dvh; }
+
+button, input { font: inherit; }
+
+.page {
+  width: min(100% - 32px, 880px);
+  margin: 0 auto;
+  padding: calc(20px + env(safe-area-inset-top)) 0 calc(32px + env(safe-area-inset-bottom));
+}
+
+.page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand-link {
+  color: var(--text);
+  font-family: Palatino, "Iowan Old Style", Georgia, serif;
+  font-size: 1.05rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand-link:focus-visible,
+.text-link:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.eyebrow, .note, .lede, .player-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.eyebrow {
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  font-size: 0.78rem;
+}
+
+.page-title, .section-title {
+  margin: 0;
+  font-family: Palatino, "Iowan Old Style", Georgia, serif;
+  font-weight: 500;
+}
+
+.page-title { font-size: clamp(2.2rem, 8vw, 3.4rem); line-height: 0.95; }
+
+.section-title { font-size: 1.35rem; }
+
+.stack, .block, .player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stack { margin-top: 16px; }
+
+.block {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg-raise);
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.metric {
+  min-height: 76px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(8, 10, 16, 0.45);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.metric-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.45rem;
+}
+
+.metric-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 36px;
+  gap: 8px;
+  align-items: center;
+  min-height: 28px;
+}
+
+.bar-label, .bar-count {
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-count { text-align: right; }
+
+.bar-track {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(232, 224, 208, 0.08);
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--cyan);
+  min-width: 0;
+}
+
+.player-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.address {
+  margin: 0;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.player-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(8, 10, 16, 0.55);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--cyan-deep);
+  border-color: rgba(126, 240, 224, 0.45);
+  color: var(--cyan);
+}
+
+.text-link {
+  color: var(--cyan);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 800px) {
+  .metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar-fill { transition: none; }
+}

@@ -120,7 +120,13 @@ function finishRun(state: RunState, kind: ResultKind): void {
     state.relicsThisRun = 0;
     state.scoreThisRun = 0;
   }
-  const { isNewBest } = recordRun(state.floorNumber, relicsKept);
+  const { isNewBest } = recordRun({
+    floorReached: state.floorNumber,
+    relicsKept,
+    score: state.scoreThisRun,
+    extracted: kind === 'extracted',
+    heroId: state.heroId,
+  });
   state.newBest = isNewBest && kind === 'extracted';
   pushEvent(state, kind === 'extracted' ? { type: 'extracted' } : { type: 'dead' });
 }
