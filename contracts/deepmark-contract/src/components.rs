@@ -3,16 +3,66 @@
 //! The contract replays each run itself (see `sim.rs`), so everything stored
 //! here is derived from a verified run, never from a number the client claims.
 
-use soroban_sdk::{contracttype, Address};
+use soroban_sdk::{contracttype, Address, String};
+
+/// How a delver looks. Cosmetic only: it never changes the simulation.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Look {
+    pub name: String,
+    pub emblem: u32,
+    pub cloak: u32,
+}
+
+/// A new delver, built in the creator.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FreshHero {
+    pub look: Look,
+    pub base: u32,
+    pub weapon: u32,
+    pub charm: u32,
+}
+
+/// Who goes down: a delver built just now, or a veteran the player owns.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HeroChoice {
+    Fresh(FreshHero),
+    Veteran(u32),
+}
+
+/// A delver the player owns. Earned only by clearing all three floors with a
+/// fresh delver, and proven by the verified victory stored with it.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Hero {
+    pub id: u32,
+    pub owner: Address,
+    pub look: Look,
+    pub base: u32,
+    pub weapon: u32,
+    pub charm: u32,
+    pub clears: u32,
+    pub minted_ledger: u32,
+    pub proof_score: u32,
+    pub proof_hp_left: u32,
+    pub proof_actions: u32,
+}
 
 /// A run the contract has opened for a player. The seed is issued on chain, so
-/// the client cannot pick a favourable one.
+/// the client cannot pick a favourable one, and the delver is fixed here.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunTicket {
     pub seed: u32,
-    pub hero: u32,
     pub start_ledger: u32,
+    pub base: u32,
+    pub weapon: u32,
+    pub charm: u32,
+    pub rank: u32,
+    pub look: Look,
+    pub veteran: Option<u32>,
 }
 
 /// The result of a verified run, derived by replaying the action log.
@@ -28,6 +78,8 @@ pub struct RunOutcome {
     pub hp_left: u32,
     pub actions: u32,
     pub rank_key: u64,
+    /// The delver minted or advanced by this run, if it earned one.
+    pub hero_id: Option<u32>,
 }
 
 /// A player's persistent profile. `best_*` describe their best verified run
@@ -46,6 +98,10 @@ pub struct PlayerRecord {
     pub forfeits: u32,
     pub relics_banked: u32,
     pub last_start_ledger: u32,
+    pub vet_best_key: u64,
+    pub vet_best_floor: u32,
+    pub vet_best_score: u32,
+    pub veteran_runs: u32,
 }
 
 impl PlayerRecord {
@@ -62,6 +118,10 @@ impl PlayerRecord {
             forfeits: 0,
             relics_banked: 0,
             last_start_ledger: 0,
+            vet_best_key: 0,
+            vet_best_floor: 0,
+            vet_best_score: 0,
+            veteran_runs: 0,
         }
     }
 }
@@ -77,6 +137,8 @@ pub struct TopEntry {
     pub score: u32,
     pub hp_left: u32,
     pub actions: u32,
+    pub name: String,
+    pub emblem: u32,
 }
 
 /// A player and their profile, for paged reads.
@@ -102,8 +164,12 @@ pub enum DataKey {
     PlayerCount,
     PlayerAt(u32),
     Record(Address),
-    Top,
+    TopFresh,
+    TopVeteran,
     Run(Address),
+    Hero(u32),
+    HeroCount,
+    HeroesOf(Address),
 }
 
 /// Classic assets carry seven decimals. One relic is minted as one whole unit
@@ -119,8 +185,10 @@ pub const RUN_TTL: u32 = 2 * DAY_IN_LEDGERS;
 /// Most actions a single run may contain. A full three floor run with
 /// generous wandering stays far below this.
 pub const MAX_ACTIONS: u32 = 2048;
-/// Entries kept in the sorted leaderboard.
+/// Entries kept in each sorted leaderboard.
 pub const TOP_SIZE: u32 = 100;
+/// Most delvers one address can hold, so an owner's index stays bounded.
+pub const MAX_HEROES_PER_OWNER: u32 = 64;
 /// Most players returned by one `players` call.
 pub const MAX_PAGE: u32 = 50;
 /// Ledgers (about five seconds each) a player must wait between starting runs.

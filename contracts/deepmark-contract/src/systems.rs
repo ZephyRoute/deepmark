@@ -32,27 +32,40 @@ pub fn rank_key(outcome: &Outcome) -> u64 {
         | (speed << ACTIONS_SHIFT)
 }
 
-/// Fold one verified run into a profile. Returns the updated profile and
-/// whether the run improved the player's best.
+/// Fold one verified run into a profile. Fresh delvers and veterans keep
+/// separate bests so they can be ranked on separate ladders. Returns the
+/// updated profile and whether the run improved that ladder's best.
 pub fn apply_outcome(
     existing: Option<PlayerRecord>,
     outcome: &Outcome,
     key: u64,
+    veteran: bool,
 ) -> (PlayerRecord, bool) {
     let mut record = existing.unwrap_or_else(PlayerRecord::empty);
-    let is_new_best = key > record.best_key;
+    let extracted = outcome.ending == Ending::Extracted;
+    let banked_score = if extracted { outcome.score } else { 0 };
 
-    if is_new_best {
-        record.best_key = key;
-        record.best_floor = outcome.floor_reached;
-        record.best_score = if outcome.ending == Ending::Extracted {
-            outcome.score
-        } else {
-            0
-        };
-        record.best_hp_left = outcome.hp_left;
-        record.best_actions = outcome.actions;
-    }
+    let is_new_best = if veteran {
+        let better = key > record.vet_best_key;
+        if better {
+            record.vet_best_key = key;
+            record.vet_best_floor = outcome.floor_reached;
+            record.vet_best_score = banked_score;
+        }
+        record.veteran_runs = record.veteran_runs.saturating_add(1);
+        better
+    } else {
+        let better = key > record.best_key;
+        if better {
+            record.best_key = key;
+            record.best_floor = outcome.floor_reached;
+            record.best_score = banked_score;
+            record.best_hp_left = outcome.hp_left;
+            record.best_actions = outcome.actions;
+        }
+        better
+    };
+
     record.total_runs = record.total_runs.saturating_add(1);
     match outcome.ending {
         Ending::Extracted => {
@@ -115,7 +128,7 @@ mod tests {
     #[test]
     fn first_run_becomes_the_best() {
         let o = outcome(Ending::Extracted, 2, 3, 5, 80);
-        let (record, new_best) = apply_outcome(None, &o, rank_key(&o));
+        let (record, new_best) = apply_outcome(None, &o, rank_key(&o), false);
         assert!(new_best);
         assert_eq!(record.best_floor, 2);
         assert_eq!(record.best_score, 3);
@@ -127,9 +140,9 @@ mod tests {
     #[test]
     fn a_worse_run_counts_but_keeps_the_best() {
         let good = outcome(Ending::Extracted, 3, 6, 9, 100);
-        let (record, _) = apply_outcome(None, &good, rank_key(&good));
+        let (record, _) = apply_outcome(None, &good, rank_key(&good), false);
         let bad = outcome(Ending::Dead, 1, 0, 0, 20);
-        let (record, new_best) = apply_outcome(Some(record), &bad, rank_key(&bad));
+        let (record, new_best) = apply_outcome(Some(record), &bad, rank_key(&bad), false);
         assert!(!new_best);
         assert_eq!(record.best_floor, 3);
         assert_eq!(record.total_runs, 2);
@@ -140,8 +153,21 @@ mod tests {
     #[test]
     fn a_death_never_banks_relics() {
         let o = outcome(Ending::Dead, 2, 0, 0, 40);
-        let (record, _) = apply_outcome(None, &o, rank_key(&o));
+        let (record, _) = apply_outcome(None, &o, rank_key(&o), false);
         assert_eq!(record.relics_banked, 0);
         assert_eq!(record.best_score, 0);
+    }
+
+    #[test]
+    fn veteran_runs_keep_their_own_best() {
+        let fresh = outcome(Ending::Extracted, 3, 6, 9, 100);
+        let (record, _) = apply_outcome(None, &fresh, rank_key(&fresh), false);
+        let vet = outcome(Ending::Extracted, 3, 4, 5, 120);
+        let (record, new_best) = apply_outcome(Some(record), &vet, rank_key(&vet), true);
+        assert!(new_best, "the veteran ladder starts empty");
+        assert_eq!(record.best_score, 6);
+        assert_eq!(record.vet_best_score, 4);
+        assert_eq!(record.veteran_runs, 1);
+        assert_eq!(record.total_runs, 2);
     }
 }

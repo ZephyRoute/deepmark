@@ -68,7 +68,8 @@ struct EnemyState {
     kind: EnemyKind,
 }
 
-struct Sim {
+/// A run in progress. Public so tests can drive it step by step.
+pub struct Run {
     stats: Stats,
     rng: Mulberry32,
     mode: Mode,
@@ -85,10 +86,11 @@ struct Sim {
     ending: Option<Ending>,
 }
 
-impl Sim {
-    fn new(stats: Stats, seed: u32) -> Self {
+impl Run {
+    pub fn new(loadout: &Loadout, seed: u32) -> Result<Self, SimError> {
+        let stats = stats_for(loadout).ok_or(SimError::UnknownLoadout)?;
         let first = floor(1);
-        Sim {
+        Ok(Run {
             stats,
             rng: Mulberry32::new(seed),
             mode: Mode::Explore,
@@ -103,7 +105,32 @@ impl Sim {
             core: 0,
             score: 0,
             ending: None,
-        }
+        })
+    }
+
+    /// True while the player is locked in a fight.
+    pub fn in_combat(&self) -> bool {
+        self.mode == Mode::Combat
+    }
+
+    /// True once the run has ended, by extraction or death.
+    pub fn is_finished(&self) -> bool {
+        self.ending.is_some()
+    }
+
+    /// The result of a finished run, `None` while it is still going.
+    pub fn outcome(&self, actions: u32) -> Option<Outcome> {
+        let ending = self.ending?;
+        Some(Outcome {
+            ending,
+            floor_reached: self.floor.number,
+            relics_common: self.common,
+            relics_rare: self.rare,
+            relics_core: self.core,
+            score: self.score,
+            hp_left: self.hp.max(0) as u32,
+            actions,
+        })
     }
 
     fn enemy_at(&self, p: Point) -> Option<usize> {
@@ -216,7 +243,7 @@ impl Sim {
         }
     }
 
-    fn apply(&mut self, action: u8) -> Result<(), SimError> {
+    pub fn apply(&mut self, action: u8) -> Result<(), SimError> {
         match action {
             ACTION_UP => self.try_move(0, -1),
             ACTION_DOWN => self.try_move(0, 1),
@@ -252,29 +279,18 @@ pub fn replay<I: Iterator<Item = u8>>(
     seed: u32,
     actions: I,
 ) -> Result<Outcome, SimError> {
-    let stats = stats_for(loadout).ok_or(SimError::UnknownLoadout)?;
-    let mut sim = Sim::new(stats, seed);
+    let mut run = Run::new(loadout, seed)?;
     let mut count: u32 = 0;
 
     for action in actions {
-        if sim.ending.is_some() {
+        if run.is_finished() {
             return Err(SimError::TrailingActions);
         }
-        sim.apply(action)?;
+        run.apply(action)?;
         count += 1;
     }
 
-    let ending = sim.ending.ok_or(SimError::Incomplete)?;
-    Ok(Outcome {
-        ending,
-        floor_reached: sim.floor.number,
-        relics_common: sim.common,
-        relics_rare: sim.rare,
-        relics_core: sim.core,
-        score: sim.score,
-        hp_left: sim.hp.max(0) as u32,
-        actions: count,
-    })
+    run.outcome(count).ok_or(SimError::Incomplete)
 }
 
 #[cfg(test)]
@@ -284,7 +300,12 @@ mod tests {
 
     /// A plain kit for a base: Bulwark Pike and Stone Heart, rank 0.
     fn plain(base: u32) -> Loadout {
-        Loadout { base, weapon: 2, charm: 2, rank: 0 }
+        Loadout {
+            base,
+            weapon: 2,
+            charm: 2,
+            rank: 0,
+        }
     }
 
     fn run(base: u32, seed: u32, actions: &[u8]) -> Result<Outcome, SimError> {
@@ -380,7 +401,12 @@ mod tests {
     fn dying_zeroes_the_banked_relics_and_score() {
         // A glass cannon (Cinder, Reaver Hook, Keen Eye: 3 hp) against the floor 2 Adept
         // can lose. Search seeds for a death.
-        let glass = Loadout { base: 1, weapon: 1, charm: 1, rank: 0 };
+        let glass = Loadout {
+            base: 1,
+            weapon: 1,
+            charm: 1,
+            rank: 0,
+        };
         let mut found = false;
         for seed in 0..20_000u32 {
             for attacks in 1..=6 {

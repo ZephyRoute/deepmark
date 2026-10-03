@@ -28,20 +28,52 @@ pub struct Modifier {
 
 /// Base delvers, in the order the client uses: 0 Lantern, 1 Cinder.
 const BASES: [Modifier; 2] = [
-    Modifier { hp: 10, dmg_min: 2, dmg_max: 4 },
-    Modifier { hp: 8, dmg_min: 3, dmg_max: 5 },
+    Modifier {
+        hp: 10,
+        dmg_min: 2,
+        dmg_max: 4,
+    },
+    Modifier {
+        hp: 8,
+        dmg_min: 3,
+        dmg_max: 5,
+    },
 ];
 
 /// Mirrors `WEAPONS` and `CHARMS` in `client/src/game/items.ts`.
 const WEAPONS: [Modifier; 3] = [
-    Modifier { hp: -2, dmg_min: 1, dmg_max: 0 },
-    Modifier { hp: -2, dmg_min: 0, dmg_max: 2 },
-    Modifier { hp: 2, dmg_min: 0, dmg_max: -1 },
+    Modifier {
+        hp: -2,
+        dmg_min: 1,
+        dmg_max: 0,
+    },
+    Modifier {
+        hp: -2,
+        dmg_min: 0,
+        dmg_max: 2,
+    },
+    Modifier {
+        hp: 2,
+        dmg_min: 0,
+        dmg_max: -1,
+    },
 ];
 const CHARMS: [Modifier; 3] = [
-    Modifier { hp: 3, dmg_min: -1, dmg_max: 0 },
-    Modifier { hp: -3, dmg_min: 1, dmg_max: 1 },
-    Modifier { hp: 1, dmg_min: 0, dmg_max: 0 },
+    Modifier {
+        hp: 3,
+        dmg_min: -1,
+        dmg_max: 0,
+    },
+    Modifier {
+        hp: -3,
+        dmg_min: 1,
+        dmg_max: 1,
+    },
+    Modifier {
+        hp: 1,
+        dmg_min: 0,
+        dmg_max: 0,
+    },
 ];
 
 pub const BASE_COUNT: u32 = BASES.len() as u32;
@@ -77,7 +109,11 @@ pub fn stats_for(loadout: &Loadout) -> Option<Stats> {
     let max_hp = (base.hp + weapon.hp + charm.hp + loadout.rank as i32).max(1);
     let dmg_min = (base.dmg_min + weapon.dmg_min + charm.dmg_min).max(1);
     let dmg_max = (base.dmg_max + weapon.dmg_max + charm.dmg_max).max(dmg_min);
-    Some(Stats { max_hp, dmg_min: dmg_min as u32, dmg_max: dmg_max as u32 })
+    Some(Stats {
+        max_hp,
+        dmg_min: dmg_min as u32,
+        dmg_max: dmg_max as u32,
+    })
 }
 
 /// Letters, digits and single spaces, 3 to 16 characters. Mirrors `isValidName`.
@@ -340,25 +376,92 @@ mod tests {
 
     #[test]
     fn base_stats_match_the_shipped_delvers() {
-        let lantern = stats_for(&Loadout { base: 0, weapon: 2, charm: 2, rank: 0 }).unwrap();
-        assert_eq!(lantern, Stats { max_hp: 13, dmg_min: 2, dmg_max: 3 });
-        let cinder = stats_for(&Loadout { base: 1, weapon: 0, charm: 2, rank: 3 }).unwrap();
-        assert_eq!(cinder, Stats { max_hp: 10, dmg_min: 4, dmg_max: 5 });
+        let lantern = stats_for(&Loadout {
+            base: 0,
+            weapon: 2,
+            charm: 2,
+            rank: 0,
+        })
+        .unwrap();
+        assert_eq!(
+            lantern,
+            Stats {
+                max_hp: 13,
+                dmg_min: 2,
+                dmg_max: 3
+            }
+        );
+        let cinder = stats_for(&Loadout {
+            base: 1,
+            weapon: 0,
+            charm: 2,
+            rank: 3,
+        })
+        .unwrap();
+        assert_eq!(
+            cinder,
+            Stats {
+                max_hp: 10,
+                dmg_min: 4,
+                dmg_max: 5
+            }
+        );
     }
 
     #[test]
     fn rank_adds_one_hit_point_each() {
-        let at = |rank| stats_for(&Loadout { base: 0, weapon: 2, charm: 2, rank }).unwrap().max_hp;
+        let at = |rank| {
+            stats_for(&Loadout {
+                base: 0,
+                weapon: 2,
+                charm: 2,
+                rank,
+            })
+            .unwrap()
+            .max_hp
+        };
         assert_eq!(at(1) - at(0), 1);
         assert_eq!(at(3) - at(0), 3);
     }
 
     #[test]
     fn invalid_indices_and_ranks_are_rejected() {
-        assert_eq!(stats_for(&Loadout { base: 2, weapon: 0, charm: 0, rank: 0 }), None);
-        assert_eq!(stats_for(&Loadout { base: 0, weapon: 3, charm: 0, rank: 0 }), None);
-        assert_eq!(stats_for(&Loadout { base: 0, weapon: 0, charm: 3, rank: 0 }), None);
-        assert_eq!(stats_for(&Loadout { base: 0, weapon: 0, charm: 0, rank: 4 }), None);
+        assert_eq!(
+            stats_for(&Loadout {
+                base: 2,
+                weapon: 0,
+                charm: 0,
+                rank: 0
+            }),
+            None
+        );
+        assert_eq!(
+            stats_for(&Loadout {
+                base: 0,
+                weapon: 3,
+                charm: 0,
+                rank: 0
+            }),
+            None
+        );
+        assert_eq!(
+            stats_for(&Loadout {
+                base: 0,
+                weapon: 0,
+                charm: 3,
+                rank: 0
+            }),
+            None
+        );
+        assert_eq!(
+            stats_for(&Loadout {
+                base: 0,
+                weapon: 0,
+                charm: 0,
+                rank: 4
+            }),
+            None
+        );
     }
 
     #[test]
@@ -366,7 +469,13 @@ mod tests {
         for base in 0..BASE_COUNT {
             for weapon in 0..WEAPON_COUNT {
                 for charm in 0..CHARM_COUNT {
-                    let s = stats_for(&Loadout { base, weapon, charm, rank: 0 }).unwrap();
+                    let s = stats_for(&Loadout {
+                        base,
+                        weapon,
+                        charm,
+                        rank: 0,
+                    })
+                    .unwrap();
                     assert!(s.max_hp >= 1 && s.dmg_min >= 1 && s.dmg_max >= s.dmg_min);
                 }
             }
