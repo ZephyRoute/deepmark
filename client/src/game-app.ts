@@ -31,6 +31,9 @@ import {
 } from './render/audio';
 import { loadDraft, loadoutOf, type Draft } from './game/draft';
 import { MAX_FLOOR } from './game/floor';
+import { HEROES, HERO_ORDER } from './game/heroes';
+import { cloakFilter } from './render/emblems';
+import type { DescentOptions, DescentStage } from './render/descent';
 import { rankForClears, type Loadout, type Look } from './game/loadout';
 import { getPlayerKeypair } from './stellar/account';
 import {
@@ -79,6 +82,8 @@ let runWasVeteran = false;
 let showLeaderboard = false;
 let showStats = false;
 let starting = false;
+let startStage: DescentStage = 'account';
+let descent: DescentOptions | null = null;
 let practice = false;
 let leaderboardLoading = false;
 let leaderboardRows: LeaderboardRow[] | null = null;
@@ -87,6 +92,8 @@ let chainRead: ChainRead = 'loading';
 /** Waiting longer than this for the chain to open a run falls back to a practice run. */
 const START_TIMEOUT_MS = 50_000;
 const START_RETRIES = 3;
+/** The stairs-open beat before the first floor appears, so the scene resolves instead of cutting. */
+const READY_HOLD_MS = 1100;
 const START_RETRY_MS = 6_000;
 const LEADERBOARD_ROWS = 10;
 
@@ -226,6 +233,13 @@ function planVeteran(hero: Hero): DelverPlan {
 async function beginRun(plan: DelverPlan): Promise<void> {
   if (starting) return;
   starting = true;
+  startStage = 'account';
+  const heroId = HERO_ORDER[plan.loadout.base] ?? 'lantern';
+  descent = {
+    art: HEROES[heroId].art,
+    filter: cloakFilter(plan.look.cloak, plan.loadout.base),
+    name: plan.look.name,
+  };
   chainStatus = '';
   chainTx = '';
   chainRank = null;
@@ -235,6 +249,7 @@ async function beginRun(plan: DelverPlan): Promise<void> {
     const ticket = await withTimeout(
       enqueue(async () => {
         const keypair = await getPlayerKeypair();
+        startStage = 'opening';
         for (let attempt = 0; ; attempt += 1) {
           try {
             return await startRun(keypair, plan.choice);
@@ -247,6 +262,9 @@ async function beginRun(plan: DelverPlan): Promise<void> {
       }),
       START_TIMEOUT_MS
     );
+    startStage = 'ready';
+    sfxDescend();
+    await sleep(READY_HOLD_MS);
     resetMotion();
     startAmbience(1);
     // The ticket is authoritative: the contract fixed the delver and the seed.
@@ -255,12 +273,15 @@ async function beginRun(plan: DelverPlan): Promise<void> {
     practice = false;
   } catch (err) {
     console.warn('Deepmark: could not open a verified run, starting a practice run', err);
+    startStage = 'offline';
+    await sleep(READY_HOLD_MS + 600);
     resetMotion();
     startAmbience(1);
     run = newRun(plan.loadout, undefined, plan.look);
     practice = true;
   } finally {
     starting = false;
+    descent = null;
   }
 }
 
@@ -551,6 +572,8 @@ function frame(): void {
     chainTx,
     chainRank,
     starting,
+    startStage,
+    descent,
     practice,
   });
   requestAnimationFrame(frame);

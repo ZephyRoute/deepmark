@@ -10,6 +10,7 @@ import { STELLAR_CONFIG } from '../stellar/config';
 import type { Hero } from '../stellar/contract';
 import { mountCreator, type CreatorHooks } from './creator';
 import { cloakFilter, emblemIcon } from './emblems';
+import { mountDescent, setDescentStage, type DescentOptions, type DescentStage } from './descent';
 import type { RelicBalances } from '../stellar/relics';
 
 export interface LeaderboardRow {
@@ -61,6 +62,8 @@ export interface ChromeView {
   chainTx: string;
   chainRank: number | null;
   starting: boolean;
+  startStage: DescentStage;
+  descent: DescentOptions | null;
   practice: boolean;
 }
 
@@ -115,6 +118,12 @@ function renderOverlay(view: ChromeView): void {
   overlayKey = key;
   overlay.replaceChildren();
 
+  if (view.starting && view.descent) {
+    overlay.hidden = false;
+    mountDescent(overlay, view.descent);
+    return;
+  }
+
   if (view.showCreator) {
     overlay.hidden = false;
     mountCreator(overlay, view.draft, view.creatorHooks);
@@ -163,6 +172,8 @@ function renderOverlay(view: ChromeView): void {
 }
 
 function overlaySignature(view: ChromeView): string {
+  // The descent scene animates itself, so it keeps one signature while it plays.
+  if (view.starting && view.descent) return 'descent';
   // The creator owns its DOM, so it must keep one constant signature while open.
   if (view.showCreator) return 'creator';
   if (view.showVault) {
@@ -512,6 +523,7 @@ function resultCard(view: ChromeView): HTMLElement {
 }
 
 export function syncChrome(view: ChromeView): void {
+  if (view.starting) setDescentStage(view.startStage);
   const playing =
     Boolean(view.run) && !view.showLeaderboard && !view.showStats && !view.showCreator && !view.showVault && view.run?.mode !== 'result';
   const hud = document.getElementById('hud');
