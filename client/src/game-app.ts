@@ -3,7 +3,13 @@ import { loadProgress, type Progress } from './game/progress';
 import { onAction, type Action } from './input/keyboard';
 import { drawWorld, face } from './render/canvas';
 import { playAttack, resetMotion } from './render/motion';
-import { syncChrome, type ChainRead, type LeaderboardRow, type OnchainSnapshot } from './render/chrome';
+import {
+  syncChrome,
+  type BoardTab,
+  type ChainRead,
+  type LeaderboardRow,
+  type OnchainSnapshot,
+} from './render/chrome';
 import './styles.css';
 import { spawnPopup, triggerShake } from './render/effects';
 import {
@@ -14,20 +20,34 @@ import {
   sfxFloorCleared,
   sfxHitEnemy,
   sfxHitPlayer,
+  sfxBossIntro,
   sfxRelic,
+  sfxStep,
+  sfxUi,
+  isMuted,
+  startAmbience,
+  stopAmbience,
+  toggleMuted,
 } from './render/audio';
-import { HERO_ORDER, loadHero, saveHero, type HeroId } from './game/heroes';
-import type { Loadout } from './game/loadout';
+import { loadDraft, loadoutOf, type Draft } from './game/draft';
+import { MAX_FLOOR } from './game/floor';
+import { rankForClears, type Loadout, type Look } from './game/loadout';
 import { getPlayerKeypair } from './stellar/account';
 import {
   CONTRACT_ERROR,
+  fetchHeroes,
   fetchRecord,
-  fetchTop,
+  fetchTopFresh,
+  fetchTopVeteran,
   finishRun,
-  HERO_CODE,
+  freshChoice,
   isContractError,
   startRun,
+  veteranChoice,
+  type Hero,
+  type HeroChoice,
   type PlayerRecord,
+  type TopEntry,
 } from './stellar/contract';
 import { fetchRelicBalances, type RelicBalances } from './stellar/relics';
 
@@ -45,7 +65,14 @@ let onchainRecord: PlayerRecord | null = null;
 let relicBalances: RelicBalances | null = null;
 let playerAddress = '';
 
-let heroId: HeroId = loadHero();
+let draft: Draft = loadDraft();
+let showCreator = false;
+let showVault = false;
+let vaultHeroes: Hero[] | null = null;
+let vaultLoading = false;
+let boardTab: BoardTab = 'fresh';
+let chainHeroId: number | null = null;
+let runWasVeteran = false;
 let showLeaderboard = false;
 let showStats = false;
 let starting = false;
@@ -119,48 +146,95 @@ function onchainSnapshot(): OnchainSnapshot | null {
   };
 }
 
-async function openLeaderboard(): Promise<void> {
-  showLeaderboard = true;
-  if (leaderboardRows || leaderboardLoading) return;
+function toRows(entries: TopEntry[]): LeaderboardRow[] {
+  return entries.slice(0, LEADERBOARD_ROWS).map((entry) => ({
+    address: entry.player,
+    name: entry.name,
+    emblem: entry.emblem,
+    score: entry.score,
+    floor: entry.floor,
+    hpLeft: entry.hp_left,
+    actions: entry.actions,
+  }));
+}
+
+async function loadBoard(): Promise<void> {
+  const tab = boardTab;
   leaderboardLoading = true;
+  leaderboardRows = null;
   try {
-    const entries = await fetchTop();
-    leaderboardRows = entries.slice(0, LEADERBOARD_ROWS).map((entry) => ({
-      address: entry.player,
-      score: entry.score,
-      floor: entry.floor,
-      hpLeft: entry.hp_left,
-      actions: entry.actions,
-    }));
+    const entries = tab === 'veteran' ? await fetchTopVeteran() : await fetchTopFresh();
+    if (tab === boardTab) leaderboardRows = toRows(entries);
   } catch (err) {
     console.warn('Deepmark: could not load the leaderboard', err);
-    leaderboardRows = [];
+    if (tab === boardTab) leaderboardRows = [];
   } finally {
-    leaderboardLoading = false;
+    if (tab === boardTab) leaderboardLoading = false;
   }
 }
 
-/** Until the creator screen lands, every delver carries the same middling kit. */
-function starterLoadout(id: HeroId): Loadout {
-  return { base: Math.max(0, HERO_ORDER.indexOf(id)), weapon: 2, charm: 2, rank: 0 };
+async function openLeaderboard(): Promise<void> {
+  showLeaderboard = true;
+  if (leaderboardRows || leaderboardLoading) return;
+  await loadBoard();
+}
+
+async function openVault(): Promise<void> {
+  showVault = true;
+  if (vaultHeroes || vaultLoading) return;
+  vaultLoading = true;
+  try {
+    const keypair = await getPlayerKeypair();
+    vaultHeroes = await fetchHeroes(keypair.publicKey());
+  } catch (err) {
+    console.warn('Deepmark: could not read the vault', err);
+    vaultHeroes = null;
+  } finally {
+    vaultLoading = false;
+  }
+}
+
+interface DelverPlan {
+  choice: HeroChoice;
+  loadout: Loadout;
+  look: Look;
+  veteran: boolean;
+}
+
+function planFresh(chosen: Draft): DelverPlan {
+  return {
+    choice: freshChoice({ look: chosen.look, base: chosen.base, weapon: chosen.weapon, charm: chosen.charm }),
+    loadout: loadoutOf(chosen),
+    look: chosen.look,
+    veteran: false,
+  };
+}
+
+function planVeteran(hero: Hero): DelverPlan {
+  return {
+    choice: veteranChoice(hero.id),
+    loadout: { base: hero.base, weapon: hero.weapon, charm: hero.charm, rank: rankForClears(hero.clears) },
+    look: hero.look,
+    veteran: true,
+  };
 }
 
 /** Opens a run on chain so the contract issues the seed. Falls back to a practice run. */
-async function beginRun(): Promise<void> {
+async function beginRun(plan: DelverPlan): Promise<void> {
   if (starting) return;
   starting = true;
-  const chosen = heroId;
-  saveHero(chosen);
   chainStatus = '';
   chainTx = '';
   chainRank = null;
+  chainHeroId = null;
+  runWasVeteran = plan.veteran;
   try {
     const ticket = await withTimeout(
       enqueue(async () => {
         const keypair = await getPlayerKeypair();
         for (let attempt = 0; ; attempt += 1) {
           try {
-            return await startRun(keypair, HERO_CODE[chosen]);
+            return await startRun(keypair, plan.choice);
           } catch (err) {
             const cooling = isContractError(err, CONTRACT_ERROR.StartCooldown);
             if (!cooling || attempt >= START_RETRIES) throw err;
@@ -171,12 +245,16 @@ async function beginRun(): Promise<void> {
       START_TIMEOUT_MS
     );
     resetMotion();
-    run = newRun(starterLoadout(chosen), ticket.seed);
+    startAmbience(1);
+    // The ticket is authoritative: the contract fixed the delver and the seed.
+    const loadout: Loadout = { base: ticket.base, weapon: ticket.weapon, charm: ticket.charm, rank: ticket.rank };
+    run = newRun(loadout, ticket.seed, ticket.look);
     practice = false;
   } catch (err) {
     console.warn('Deepmark: could not open a verified run, starting a practice run', err);
     resetMotion();
-    run = newRun(starterLoadout(chosen));
+    startAmbience(1);
+    run = newRun(plan.loadout, undefined, plan.look);
     practice = true;
   } finally {
     starting = false;
@@ -189,6 +267,8 @@ async function verifyOnChain(finished: RunState): Promise<void> {
   try {
     const { hash, outcome } = await enqueue(async () => finishRun(await getPlayerKeypair(), finished.actions));
     chainTx = hash;
+    chainHeroId = outcome.hero_id ?? null;
+    if (chainHeroId !== null) vaultHeroes = null;
     const relicsMatch =
       outcome.relics_common + outcome.relics_rare + outcome.relics_core === finished.relicsThisRun;
     const agrees =
@@ -199,7 +279,7 @@ async function verifyOnChain(finished: RunState): Promise<void> {
     if (!agrees) console.error('Deepmark: the contract result differs from the local simulation', outcome);
     chainStatus = agrees ? 'Verified on Stellar' : 'Verified on Stellar (this browser disagreed, the chain result stands)';
     await refreshOnchain();
-    const top = await fetchTop();
+    const top = runWasVeteran ? await fetchTopVeteran() : await fetchTopFresh();
     const position = top.findIndex((entry) => entry.player === playerAddress);
     chainRank = position >= 0 ? position + 1 : null;
     leaderboardRows = null;
@@ -250,7 +330,7 @@ function handleEvent(event: GameEvent): void {
       break;
     case 'relic':
       spawnPopup(event.x, event.y, '+relic', '#ffca28');
-      sfxRelic();
+      sfxRelic(event.kind);
       break;
     case 'floorCleared':
       sfxFloorCleared();
@@ -258,13 +338,17 @@ function handleEvent(event: GameEvent): void {
     case 'descended':
       resetMotion();
       sfxDescend();
+      startAmbience(event.floor);
+      if (event.floor >= MAX_FLOOR) sfxBossIntro();
       break;
     case 'extracted':
+      stopAmbience();
       sfxExtracted();
       progress = loadProgress();
       if (run && !practice) void verifyOnChain(run);
       break;
     case 'dead':
+      stopAmbience();
       sfxDead();
       triggerShake(250, 10);
       progress = loadProgress();
@@ -282,7 +366,23 @@ const MOVE_CODES = {
   right: ActionCode.Right,
 } as const;
 
+function syncMuteButton(): void {
+  const button = document.getElementById('mute');
+  if (!button) return;
+  const muted = isMuted();
+  button.textContent = muted ? 'Sound off' : 'Sound on';
+  button.setAttribute('aria-pressed', muted ? 'true' : 'false');
+}
+
+syncMuteButton();
+
 onAction((action) => {
+  if (action === 'mute') {
+    toggleMuted();
+    syncMuteButton();
+    return;
+  }
+  if (!run) sfxUi();
   if (showStats) {
     if (action === 'stats' || action === 'cancel') showStats = false;
     return;
@@ -290,18 +390,31 @@ onAction((action) => {
 
   if (showLeaderboard) {
     if (action === 'leaderboard' || action === 'cancel') showLeaderboard = false;
+    if (action === 'tabFresh' || action === 'tabVeteran') {
+      boardTab = action === 'tabVeteran' ? 'veteran' : 'fresh';
+      void loadBoard();
+    }
     return;
   }
 
   if (starting) return;
 
+  if (showCreator) {
+    if (action === 'cancel') showCreator = false;
+    return;
+  }
+
+  if (showVault) {
+    if (action === 'vault' || action === 'cancel') showVault = false;
+    return;
+  }
+
   if (!run) {
-    if (action === 'pickLantern' || action === 'left') heroId = 'lantern';
-    if (action === 'pickCinder' || action === 'right') heroId = 'cinder';
-    if (action === 'pickLantern' || action === 'pickCinder' || action === 'left' || action === 'right') {
-      saveHero(heroId);
+    if (action === 'confirm') {
+      draft = loadDraft();
+      showCreator = true;
     }
-    if (action === 'confirm') void beginRun();
+    if (action === 'vault') void openVault();
     if (action === 'stats') showStats = true;
     if (action === 'leaderboard') void openLeaderboard();
     return;
@@ -328,7 +441,8 @@ onAction((action) => {
     const dir = DIRS[action];
     if (dir) {
       if (dir[0] !== 0) face(dir[0] < 0 ? -1 : 1);
-      applyAction(run, MOVE_CODES[action as keyof typeof MOVE_CODES]);
+      const moved = applyAction(run, MOVE_CODES[action as keyof typeof MOVE_CODES]);
+      if (moved && run.mode === 'explore') sfxStep();
     }
   }
 
@@ -343,6 +457,29 @@ function frame(): void {
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
   syncChrome({
+    showCreator,
+    showVault,
+    draft,
+    creatorHooks: {
+      onBegin: (chosen) => {
+        draft = chosen;
+        showCreator = false;
+        void beginRun(planFresh(chosen));
+      },
+      onBack: () => {
+        showCreator = false;
+      },
+    },
+    vaultHeroes,
+    vaultLoading,
+    onVeteran: (id) => {
+      const hero = vaultHeroes?.find((h) => h.id === id);
+      if (!hero) return;
+      showVault = false;
+      void beginRun(planVeteran(hero));
+    },
+    boardTab,
+    chainHeroId,
     showLeaderboard,
     showStats,
     leaderboardLoading,
@@ -358,7 +495,6 @@ function frame(): void {
     chainRank,
     starting,
     practice,
-    heroId,
   });
   requestAnimationFrame(frame);
 }

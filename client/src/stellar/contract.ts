@@ -1,13 +1,39 @@
 import { contract, TransactionBuilder, type Keypair, type Transaction } from '@stellar/stellar-sdk';
 import { STELLAR_CONFIG } from './config';
 
-/** Hero ids as the contract knows them. */
-export const HERO_CODE = { lantern: 0, cinder: 1 } as const;
+export interface Look {
+  name: string;
+  emblem: number;
+  cloak: number;
+}
+
+export interface FreshHero {
+  look: Look;
+  base: number;
+  weapon: number;
+  charm: number;
+}
+
+/** The delver a run is started with: one built just now, or a veteran the player owns. */
+export type HeroChoice = { tag: 'Fresh'; values: readonly [FreshHero] } | { tag: 'Veteran'; values: readonly [number] };
+
+export function freshChoice(hero: FreshHero): HeroChoice {
+  return { tag: 'Fresh', values: [hero] };
+}
+
+export function veteranChoice(id: number): HeroChoice {
+  return { tag: 'Veteran', values: [id] };
+}
 
 export interface RunTicket {
   seed: number;
-  hero: number;
   start_ledger: number;
+  base: number;
+  weapon: number;
+  charm: number;
+  rank: number;
+  look: Look;
+  veteran?: number;
 }
 
 export interface RunOutcome {
@@ -20,6 +46,7 @@ export interface RunOutcome {
   hp_left: number;
   actions: number;
   rank_key: bigint;
+  hero_id?: number;
 }
 
 export interface PlayerRecord {
@@ -34,6 +61,10 @@ export interface PlayerRecord {
   forfeits: number;
   relics_banked: number;
   last_start_ledger: number;
+  vet_best_key: bigint;
+  vet_best_floor: number;
+  vet_best_score: number;
+  veteran_runs: number;
 }
 
 export interface TopEntry {
@@ -43,11 +74,28 @@ export interface TopEntry {
   score: number;
   hp_left: number;
   actions: number;
+  name: string;
+  emblem: number;
 }
 
 export interface PlayerSummary {
   player: string;
   record: PlayerRecord;
+}
+
+/** A delver the player owns, earned by clearing all three floors. */
+export interface Hero {
+  id: number;
+  owner: string;
+  look: Look;
+  base: number;
+  weapon: number;
+  charm: number;
+  clears: number;
+  minted_ledger: number;
+  proof_score: number;
+  proof_hp_left: number;
+  proof_actions: number;
 }
 
 type Call<T> = Promise<contract.AssembledTransaction<T>>;
@@ -56,16 +104,19 @@ type Call<T> = Promise<contract.AssembledTransaction<T>>;
 // contract.Result (isErr, unwrap, unwrapErr), confirmed against the deployed
 // contract.
 interface DeepmarkContractApi {
-  start_run: (args: { player: string; hero: number }, options?: contract.MethodOptions) => Call<contract.Result<RunTicket>>;
+  start_run: (args: { player: string; choice: HeroChoice }, options?: contract.MethodOptions) => Call<contract.Result<RunTicket>>;
   finish_run: (
     args: { player: string; actions: Uint8Array },
     options?: contract.MethodOptions
   ) => Call<contract.Result<RunOutcome>>;
   get_record: (args: { player: string }, options?: contract.MethodOptions) => Call<PlayerRecord | undefined>;
   get_open_run: (args: { player: string }, options?: contract.MethodOptions) => Call<RunTicket | undefined>;
-  top: (options?: contract.MethodOptions) => Call<TopEntry[]>;
+  top_fresh: (options?: contract.MethodOptions) => Call<TopEntry[]>;
+  top_veteran: (options?: contract.MethodOptions) => Call<TopEntry[]>;
   player_count: (options?: contract.MethodOptions) => Call<number>;
   players: (args: { start: number; limit: number }, options?: contract.MethodOptions) => Call<PlayerSummary[]>;
+  hero: (args: { id: number }, options?: contract.MethodOptions) => Call<Hero | undefined>;
+  heroes_of: (args: { owner: string }, options?: contract.MethodOptions) => Call<number[]>;
 }
 
 type DeepmarkClient = contract.Client & DeepmarkContractApi;
@@ -114,6 +165,9 @@ export const CONTRACT_ERROR = {
   TrailingActions: 6,
   TooFast: 7,
   StartCooldown: 8,
+  InvalidName: 9,
+  HeroNotFound: 10,
+  NotHeroOwner: 11,
 } as const;
 
 export function isContractError(err: unknown, code: number): boolean {
@@ -124,10 +178,10 @@ export function isContractError(err: unknown, code: number): boolean {
  * Opens a run on chain and returns the seed the contract issued. The run is
  * played with this seed, so the client cannot pick a favourable one.
  */
-export async function startRun(keypair: Keypair, hero: number): Promise<RunTicket> {
+export async function startRun(keypair: Keypair, choice: HeroChoice): Promise<RunTicket> {
   const client = await clientFor(keypair);
   const assembled = await client.start_run(
-    { player: keypair.publicKey(), hero },
+    { player: keypair.publicKey(), choice },
     { timeoutInSeconds: SEND_TIMEOUT_SECONDS }
   );
   const sent = await assembled.signAndSend();
@@ -142,8 +196,9 @@ export interface FinishedRun {
 }
 
 /**
- * Submits the action log. The contract replays it, derives the result, and
- * mints the banked relics. Called after the result screen is already showing.
+ * Submits the action log. The contract replays it, derives the result, mints
+ * the banked relics and, after a full clear, earns the delver. Called after
+ * the result screen is already showing.
  */
 export async function finishRun(keypair: Keypair, actions: readonly number[]): Promise<FinishedRun> {
   const client = await clientFor(keypair);
@@ -164,9 +219,15 @@ export async function fetchRecord(address: string): Promise<PlayerRecord | null>
   return assembled.result ?? null;
 }
 
-export async function fetchTop(): Promise<TopEntry[]> {
+export async function fetchTopFresh(): Promise<TopEntry[]> {
   const client = await readClient();
-  const assembled = await client.top();
+  const assembled = await client.top_fresh();
+  return assembled.result ?? [];
+}
+
+export async function fetchTopVeteran(): Promise<TopEntry[]> {
+  const client = await readClient();
+  const assembled = await client.top_veteran();
   return assembled.result ?? [];
 }
 
@@ -180,4 +241,12 @@ export async function fetchPlayers(start: number, limit: number): Promise<Player
   const client = await readClient();
   const assembled = await client.players({ start, limit });
   return assembled.result ?? [];
+}
+
+/** Every delver an address owns. At most 64, so one call per delver is bounded. */
+export async function fetchHeroes(owner: string): Promise<Hero[]> {
+  const client = await readClient();
+  const ids = (await client.heroes_of({ owner })).result ?? [];
+  const heroes = await Promise.all(ids.map(async (id) => (await client.hero({ id })).result));
+  return heroes.filter((hero): hero is Hero => hero !== undefined && hero !== null);
 }

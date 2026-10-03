@@ -1,4 +1,5 @@
 import { GRID_WIDTH, GRID_HEIGHT, TILE_SIZE } from '../game/floor';
+import { cloakFilter } from './emblems';
 import type { HeroId } from '../game/heroes';
 import type { RelicKind } from '../game/floor';
 import type { RunState } from '../game/state';
@@ -297,7 +298,10 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
     ? 1 - Math.sin(playerPose.phase * Math.PI) * 0.08
     : 1;
   if (ready(playerImage)) {
+    // The cloak colour recolours the delver. Browsers without canvas filters just draw the base art.
+    ctx.filter = cloakFilter(run.look.cloak);
     drawFooted(ctx, playerImage, player.cx + playerLunge, player.cy, ACTOR_SIZE.player, facing < 0, squat);
+    ctx.filter = 'none';
   }
   else {
     ctx.fillStyle = '#4fc3f7';

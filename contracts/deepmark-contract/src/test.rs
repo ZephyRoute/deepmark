@@ -81,7 +81,7 @@ fn fresh(env: &Env, base: u32, weapon: u32, charm: u32, name: &str) -> HeroChoic
     })
 }
 
-/// Bulwark Pike and Stone Heart on Lantern: 13 HP, damage 2 to 3.
+/// Bulwark Pike and Stone Heart on Lantern: 12 HP, damage 2 to 4.
 fn plain(env: &Env) -> HeroChoice {
     fresh(env, 0, 2, 2, "Ash")
 }
@@ -325,7 +325,7 @@ fn a_verified_run_updates_the_record_and_consumes_the_run() {
     assert!(outcome.extracted);
     assert_eq!(outcome.floor_reached, 1);
     assert_eq!(outcome.score, 0);
-    assert_eq!(outcome.hp_left, 13);
+    assert_eq!(outcome.hp_left, 12);
     assert_eq!(outcome.hero_id, None);
     assert_eq!(outcome.actions as usize, log.len());
 

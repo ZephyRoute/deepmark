@@ -31,10 +31,10 @@ const BASES: [Modifier; 2] = [
     Modifier {
         hp: 10,
         dmg_min: 2,
-        dmg_max: 4,
+        dmg_max: 5,
     },
     Modifier {
-        hp: 8,
+        hp: 9,
         dmg_min: 3,
         dmg_max: 5,
     },
@@ -53,21 +53,21 @@ const WEAPONS: [Modifier; 3] = [
         dmg_max: 2,
     },
     Modifier {
-        hp: 2,
+        hp: 1,
         dmg_min: 0,
         dmg_max: -1,
     },
 ];
 const CHARMS: [Modifier; 3] = [
     Modifier {
-        hp: 3,
+        hp: 1,
         dmg_min: -1,
-        dmg_max: 0,
+        dmg_max: 1,
     },
     Modifier {
         hp: -3,
         dmg_min: 1,
-        dmg_max: 1,
+        dmg_max: 2,
     },
     Modifier {
         hp: 1,
@@ -386,9 +386,9 @@ mod tests {
         assert_eq!(
             lantern,
             Stats {
-                max_hp: 13,
+                max_hp: 12,
                 dmg_min: 2,
-                dmg_max: 3
+                dmg_max: 4
             }
         );
         let cinder = stats_for(&Loadout {
@@ -401,7 +401,7 @@ mod tests {
         assert_eq!(
             cinder,
             Stats {
-                max_hp: 10,
+                max_hp: 11,
                 dmg_min: 4,
                 dmg_max: 5
             }

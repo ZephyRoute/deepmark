@@ -1,13 +1,21 @@
 import { ENEMIES } from '../game/enemies';
 import { MAX_FLOOR } from '../game/floor';
-import { HEROES, type HeroId } from '../game/heroes';
+import { HEROES, HERO_ORDER } from '../game/heroes';
 import type { Progress } from '../game/progress';
 import type { RunState } from '../game/state';
+import type { Draft } from '../game/draft';
+import { CHARMS, WEAPONS } from '../game/items';
+import { MAX_RANK } from '../game/loadout';
 import { STELLAR_CONFIG } from '../stellar/config';
+import type { Hero } from '../stellar/contract';
+import { mountCreator, type CreatorHooks } from './creator';
+import { cloakFilter, emblemIcon } from './emblems';
 import type { RelicBalances } from '../stellar/relics';
 
 export interface LeaderboardRow {
   address: string;
+  name: string;
+  emblem: number;
   score: number;
   floor: number;
   hpLeft: number;
@@ -26,7 +34,18 @@ export interface OnchainSnapshot {
   relicsBanked: number;
 }
 
+export type BoardTab = 'fresh' | 'veteran';
+
 export interface ChromeView {
+  showCreator: boolean;
+  showVault: boolean;
+  draft: Draft;
+  creatorHooks: CreatorHooks;
+  vaultHeroes: Hero[] | null;
+  vaultLoading: boolean;
+  onVeteran: (id: number) => void;
+  boardTab: BoardTab;
+  chainHeroId: number | null;
   showLeaderboard: boolean;
   showStats: boolean;
   leaderboardLoading: boolean;
@@ -42,7 +61,6 @@ export interface ChromeView {
   chainRank: number | null;
   starting: boolean;
   practice: boolean;
-  heroId: HeroId;
 }
 
 const TX_HASH = /^[a-f0-9]{64}$/;
@@ -96,6 +114,18 @@ function renderOverlay(view: ChromeView): void {
   overlayKey = key;
   overlay.replaceChildren();
 
+  if (view.showCreator) {
+    overlay.hidden = false;
+    mountCreator(overlay, view.draft, view.creatorHooks);
+    return;
+  }
+
+  if (view.showVault) {
+    overlay.hidden = false;
+    overlay.append(vaultCard(view));
+    return;
+  }
+
   if (view.showLeaderboard) {
     overlay.hidden = false;
     overlay.append(leaderboardCard(view));
@@ -132,11 +162,17 @@ function renderOverlay(view: ChromeView): void {
 }
 
 function overlaySignature(view: ChromeView): string {
+  // The creator owns its DOM, so it must keep one constant signature while open.
+  if (view.showCreator) return 'creator';
+  if (view.showVault) {
+    const ids = view.vaultHeroes?.map((h) => `${h.id}:${h.clears}`).join('|');
+    return `vault:${view.vaultLoading}:${ids ?? ''}`;
+  }
   if (view.showLeaderboard) {
     const rows = view.leaderboardRows
       ?.map((row) => `${row.address}:${row.score}:${row.floor}:${row.hpLeft}:${row.actions}`)
       .join('|');
-    return `board:${view.leaderboardLoading}:${rows ?? ''}:${view.playerAddress}`;
+    return `board:${view.boardTab}:${view.leaderboardLoading}:${rows ?? ''}:${view.playerAddress}`;
   }
   if (view.showStats) {
     const progress = view.progress;
@@ -149,10 +185,10 @@ function overlaySignature(view: ChromeView): string {
   if (!view.run) {
     const chain = view.onchain ? `${view.onchain.bestScore}:${view.onchain.bestFloor}:${view.onchain.runs}` : '';
     const vault = view.relics ? `${view.relics.common}:${view.relics.rare}:${view.relics.core}` : '';
-    return `title:${view.heroId}:${view.starting}:${view.progress.runsPlayed}:${view.progress.bestFloor}:${view.progress.bestRelics}:${chain}:${vault}`;
+    return `title:${view.starting}:${view.progress.runsPlayed}:${view.progress.bestFloor}:${view.progress.bestRelics}:${chain}:${vault}`;
   }
   if (view.run.mode === 'result') {
-    return `result:${view.run.resultKind}:${view.run.floorNumber}:${view.run.relicsThisRun}:${view.run.scoreThisRun}:${view.run.player.hp}:${view.run.newBest}:${view.chainStatus}:${view.chainRank ?? ''}:${view.chainTx}:${view.practice}:${view.progress.bestFloor}:${view.progress.bestRelics}`;
+    return `result:${view.run.resultKind}:${view.run.floorNumber}:${view.run.relicsThisRun}:${view.run.scoreThisRun}:${view.run.player.hp}:${view.run.newBest}:${view.chainStatus}:${view.chainRank ?? ''}:${view.chainTx}:${view.practice}:${view.chainHeroId ?? ''}:${view.progress.bestFloor}:${view.progress.bestRelics}`;
   }
   if (view.run.mode === 'combat') {
     const enemy = view.run.activeEnemyIndex !== null ? view.run.enemies[view.run.activeEnemyIndex] : undefined;
@@ -169,16 +205,13 @@ function titleCard(view: ChromeView): HTMLElement {
   card.append(el('p', 'eyebrow', 'Stellar testnet'));
   card.append(el('h1', 'title', 'Deepmark'));
   card.append(el('p', 'tagline', 'Leave a mark in the depths, or lose it on the way out.'));
-  const picks = el('div', 'hero-picks');
-  picks.append(heroPick('lantern', view.heroId));
-  picks.append(heroPick('cinder', view.heroId));
-  card.append(picks);
   const actions = el('div', 'title-actions');
-  const descend = button(view.starting ? 'Descending...' : 'Descend', 'confirm', 'btn btn-primary');
+  const descend = button(view.starting ? 'Descending...' : 'Forge a delver', 'confirm', 'btn btn-primary');
   descend.disabled = view.starting;
   actions.append(descend);
-  actions.append(button('Stats', 'stats', 'btn'));
+  actions.append(button('Vault', 'vault', 'btn'));
   actions.append(button('Leaderboard', 'leaderboard', 'btn'));
+  actions.append(button('Stats', 'stats', 'btn'));
   card.append(actions);
   if (view.starting) {
     const waiting = el('p', 'chain', WAITING_TEXT);
@@ -206,28 +239,11 @@ function titleCard(view: ChromeView): HTMLElement {
   }
   const vault = relicSummary(view.relics);
   if (vault) card.append(el('p', 'chain', `Relics in your vault: ${vault}`));
-  card.append(el('p', 'hint', 'Left and right choose a delver. Enter descends. M opens your record. WASD moves. Esc retreats or extracts.'));
+  card.append(el('p', 'hint', 'Enter forges a delver. V opens your vault. L the leaderboard. M your record. WASD moves. Esc retreats or extracts.'));
   const network = el('a', 'quiet-link', 'All players');
   network.href = '/stats';
   card.append(network);
   return card;
-}
-
-function heroPick(id: HeroId, selectedId: HeroId): HTMLButtonElement {
-  const hero = HEROES[id];
-  const selected = id === selectedId;
-  const node = el('button', selected ? 'hero-pick is-selected' : 'hero-pick');
-  node.type = 'button';
-  node.dataset.action = id === 'lantern' ? 'pickLantern' : 'pickCinder';
-  node.setAttribute('aria-pressed', selected ? 'true' : 'false');
-  const portrait = el('img', 'hero-portrait');
-  portrait.src = `/art/${hero.art}`;
-  portrait.alt = '';
-  const copy = el('span', 'hero-copy');
-  copy.append(el('span', 'hero-name', hero.name));
-  copy.append(el('span', 'hero-blurb', hero.blurb));
-  node.append(portrait, copy);
-  return node;
 }
 
 function leaderboardCard(view: ChromeView): HTMLElement {
@@ -237,19 +253,31 @@ function leaderboardCard(view: ChromeView): HTMLElement {
     el('p', 'panel-sub', 'Best verified runs. The contract replays every run before it is ranked.')
   );
 
+  const tabs = el('div', 'tab-row');
+  const fresh = button('Fresh delvers', 'tabFresh', view.boardTab === 'fresh' ? 'btn btn-primary' : 'btn');
+  const veteran = button('Veterans', 'tabVeteran', view.boardTab === 'veteran' ? 'btn btn-primary' : 'btn');
+  fresh.setAttribute('aria-pressed', view.boardTab === 'fresh' ? 'true' : 'false');
+  veteran.setAttribute('aria-pressed', view.boardTab === 'veteran' ? 'true' : 'false');
+  tabs.append(fresh, veteran);
+  card.append(tabs);
+
   if (view.leaderboardLoading) {
     card.append(el('p', 'panel-body', 'Loading records...'));
   } else if (!view.leaderboardRows || view.leaderboardRows.length === 0) {
-    card.append(el('p', 'panel-body', 'No verified runs yet. Be the first.'));
+    card.append(
+      el('p', 'panel-body', view.boardTab === 'veteran' ? 'No veteran has descended yet.' : 'No verified runs yet. Be the first.')
+    );
   } else {
     const table = el('ol', 'board');
     view.leaderboardRows.forEach((row, index) => {
-      const item = el('li', row.address === view.playerAddress ? 'board-row is-you' : 'board-row');
+      const mine = row.address === view.playerAddress;
+      const item = el('li', mine ? 'board-row is-you' : 'board-row');
       item.append(el('span', 'board-rank', `${index + 1}`));
-      const who = row.address === view.playerAddress
-        ? `${shortenAddress(row.address)} (you)`
-        : shortenAddress(row.address);
-      item.append(el('span', 'board-who', who));
+      const who = el('span', 'board-who');
+      who.append(emblemIcon(row.emblem, 'emblem emblem-small'));
+      who.append(el('span', 'board-name', mine ? `${row.name} (you)` : row.name));
+      who.append(el('span', 'board-addr', shortenAddress(row.address)));
+      item.append(who);
       item.append(el('span', 'board-stat', `${row.score}`));
       item.append(el('span', 'board-stat', `${row.floor}/${MAX_FLOOR}`));
       item.append(el('span', 'board-stat', `${row.hpLeft}`));
@@ -258,7 +286,7 @@ function leaderboardCard(view: ChromeView): HTMLElement {
     });
     const head = el('div', 'board-head');
     head.append(el('span', '', '#'));
-    head.append(el('span', '', 'Player'));
+    head.append(el('span', '', 'Delver'));
     head.append(el('span', '', 'Score'));
     head.append(el('span', '', 'Floor'));
     head.append(el('span', '', 'HP'));
@@ -268,6 +296,56 @@ function leaderboardCard(view: ChromeView): HTMLElement {
 
   card.append(button('Back', 'cancel', 'btn'));
   return card;
+}
+
+function vaultCard(view: ChromeView): HTMLElement {
+  const card = el('div', 'panel panel-scroll panel-wide');
+  card.append(el('h2', 'panel-title', 'Your vault'));
+  card.append(
+    el(
+      'p',
+      'panel-sub',
+      'Delvers you earned by clearing all three floors. Each is a token on Stellar that you own, and each can descend again as a veteran.'
+    )
+  );
+
+  if (view.vaultLoading || !view.vaultHeroes) {
+    card.append(el('p', 'panel-body', view.vaultLoading ? 'Opening the vault...' : 'The vault could not be read.'));
+  } else if (view.vaultHeroes.length === 0) {
+    card.append(el('p', 'panel-body', 'Empty for now. Clear all three floors with a new delver to claim one.'));
+  } else {
+    const list = el('div', 'vault-list');
+    for (const hero of view.vaultHeroes) list.append(heroCard(hero, view));
+    card.append(list);
+  }
+
+  card.append(button('Back', 'cancel', 'btn'));
+  return card;
+}
+
+function heroCard(hero: Hero, view: ChromeView): HTMLElement {
+  const item = el('article', 'vault-card');
+  const baseId = HERO_ORDER[hero.base] ?? 'lantern';
+  const portrait = el('img', 'vault-portrait');
+  portrait.src = `/art/${HEROES[baseId].art}`;
+  portrait.alt = '';
+  portrait.style.filter = cloakFilter(hero.look.cloak);
+  const copy = el('div', 'vault-copy');
+  const title = el('p', 'vault-name');
+  title.append(emblemIcon(hero.look.emblem, 'emblem emblem-small'), el('span', '', hero.look.name));
+  const kit = `${HEROES[baseId].name}  ·  ${WEAPONS[hero.weapon]?.name ?? '?'}  ·  ${CHARMS[hero.charm]?.name ?? '?'}`;
+  const rank = Math.min(hero.clears, MAX_RANK);
+  copy.append(
+    title,
+    el('p', 'vault-kit', kit),
+    el('p', 'vault-meta', `Veteran rank ${rank}  ·  ${hero.clears} ${hero.clears === 1 ? 'clear' : 'clears'}`),
+    el('p', 'vault-meta', `First clear: score ${hero.proof_score}, ${hero.proof_hp_left} HP left, ${hero.proof_actions} moves`)
+  );
+  const go = el('button', 'btn btn-primary', 'Descend as a veteran');
+  go.type = 'button';
+  go.addEventListener('click', () => view.onVeteran(hero.id));
+  item.append(portrait, copy, go);
+  return item;
 }
 
 function metric(value: string, label: string): HTMLElement {
@@ -408,12 +486,17 @@ function resultCard(view: ChromeView): HTMLElement {
     el('p', 'stats', `Best floor ${view.progress.bestFloor} / ${MAX_FLOOR}  ·  Best relics ${view.progress.bestRelics}`)
   );
   if (view.practice) {
-    card.append(el('p', 'chain', view.chainStatus || 'Practice run. This one is not recorded on Stellar.'));
+    card.append(el('p', 'chain', view.chainStatus || 'Practice run. This one is not recorded on Stellar, so it cannot earn a delver.'));
   } else if (view.chainStatus) {
     const status = el('p', 'chain', view.chainStatus);
     status.setAttribute('role', 'status');
     card.append(status);
     if (view.chainRank !== null) card.append(el('p', 'chain', `Leaderboard rank #${view.chainRank}`));
+    if (view.chainHeroId !== null) {
+      const earned = el('p', 'new-best', `${run.look.name} is yours. Find them in your vault.`);
+      earned.setAttribute('role', 'status');
+      card.append(earned);
+    }
     if (TX_HASH.test(view.chainTx)) {
       const link = el('a', 'quiet-link', 'View the transaction');
       link.href = `${STELLAR_CONFIG.explorerUrl}/tx/${view.chainTx}`;
@@ -427,7 +510,8 @@ function resultCard(view: ChromeView): HTMLElement {
 }
 
 export function syncChrome(view: ChromeView): void {
-  const playing = Boolean(view.run) && !view.showLeaderboard && !view.showStats && view.run?.mode !== 'result';
+  const playing =
+    Boolean(view.run) && !view.showLeaderboard && !view.showStats && !view.showCreator && !view.showVault && view.run?.mode !== 'result';
   const hud = document.getElementById('hud');
   if (hud) hud.hidden = !playing;
 
@@ -439,12 +523,17 @@ export function syncChrome(view: ChromeView): void {
   if (playing && view.run) {
     const floorName = ['', 'Reliquary', 'Drowned chapel', 'Obsidian crypt'][view.run.floorNumber] ?? '';
     setText('floor-label', `Floor ${view.run.floorNumber} / ${MAX_FLOOR}  ${floorName}`);
+    setText('hud-name', view.run.look.name);
     setText('hud-hp', `HP ${view.run.player.hp}/${view.run.player.maxHp}`);
     setText('hud-relics', `Relics ${view.run.relicsThisRun}`);
     setText('hud-score', `Score ${view.run.scoreThisRun}`);
     setText('hud-mode', view.practice ? 'Practice, not recorded' : '');
     const lastLine = view.run.log[view.run.log.length - 1] ?? '';
     setText('hud-log', lastLine);
+  } else if (view.showCreator) {
+    setText('floor-label', 'Forge');
+  } else if (view.showVault) {
+    setText('floor-label', 'Vault');
   } else if (view.showStats) {
     setText('floor-label', 'Record');
   } else if (view.showLeaderboard) {

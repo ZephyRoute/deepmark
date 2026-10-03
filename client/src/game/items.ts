@@ -19,14 +19,14 @@ export interface Item extends Modifier {
 }
 
 export const WEAPONS: readonly Item[] = [
-  { id: 0, name: 'Plumb Blade', blurb: 'Steady strikes. Fewer lucky hits, fewer bad ones.', hp: -2, dmgMin: 1, dmgMax: 0 },
+  { id: 0, name: 'Plumb Blade', blurb: 'A sharper floor on every strike, at the cost of a thinner coat.', hp: -2, dmgMin: 1, dmgMax: 0 },
   { id: 1, name: 'Reaver Hook', blurb: 'Wild swings that can end a fight early.', hp: -2, dmgMin: 0, dmgMax: 2 },
-  { id: 2, name: 'Bulwark Pike', blurb: 'A reach that keeps you standing longer.', hp: 2, dmgMin: 0, dmgMax: -1 },
+  { id: 2, name: 'Bulwark Pike', blurb: 'A reach that keeps you standing, with softer blows.', hp: 1, dmgMin: 0, dmgMax: -1 },
 ];
 
 export const CHARMS: readonly Item[] = [
-  { id: 0, name: 'Oil Flask', blurb: 'Warm light and a thicker coat. Softer blows.', hp: 3, dmgMin: -1, dmgMax: 0 },
-  { id: 1, name: 'Keen Eye', blurb: 'Hits land harder. You feel every wound.', hp: -3, dmgMin: 1, dmgMax: 1 },
+  { id: 0, name: 'Oil Flask', blurb: 'Slick and unsteady: hits vary more and you are a little sturdier.', hp: 1, dmgMin: -1, dmgMax: 1 },
+  { id: 1, name: 'Keen Eye', blurb: 'Hits land far harder. You feel every wound.', hp: -3, dmgMin: 1, dmgMax: 2 },
   { id: 2, name: 'Stone Heart', blurb: 'A small, dependable boost to endurance.', hp: 1, dmgMin: 0, dmgMax: 0 },
 ];
 

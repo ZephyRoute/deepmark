@@ -350,7 +350,7 @@ mod tests {
         assert_eq!(out.ending, Ending::Extracted);
         assert_eq!(out.floor_reached, 1);
         assert_eq!(out.score, 0);
-        assert_eq!(out.hp_left, 13);
+        assert_eq!(out.hp_left, 12);
         assert_eq!(out.actions as usize, log.len());
     }
 
