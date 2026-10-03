@@ -15,8 +15,17 @@ if (previewDescent) {
   host.style.cssText = 'position:fixed;inset:0;background:#05060b';
   document.body.replaceChildren(host);
   void Promise.all([import('./render/descent'), import('./styles.css')]).then(([scene]) => {
-    scene.mountDescent(host, { art: 'cinder.png', filter: 'none', name: 'Brannoch' });
-    setTimeout(() => scene.setDescentStage('opening'), 1500);
+    scene.mountDescent(host, {
+      art: 'cinder.png',
+      filter: 'none',
+      name: 'Brannoch',
+      emblem: 1,
+      kit: 'Cinder  ·  Reaver Hook  ·  Stone Heart',
+    });
+    setTimeout(() => scene.setDescentStage('opening'), 2500);
+    if (new URLSearchParams(window.location.search).get('dive') === '1') {
+      setTimeout(() => scene.setDescentStage('ready'), 7000);
+    }
   });
 } else if (isPublicStatsPath(window.location.pathname)) {
   document.title = 'Deepmark traction on Stellar testnet';

@@ -577,37 +577,175 @@ body:has(#overlay:not([hidden])) .touch {
   height: 100%;
   min-height: 320px;
   overflow: hidden;
-  border-radius: 16px;
   background: #05060b;
-  animation: descent-in 420ms ease-out both;
+  animation: descent-in 600ms ease-out both;
 }
 
 @keyframes descent-in { from { opacity: 0; } to { opacity: 1; } }
 
-.descent-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.descent-art {
+  position: absolute;
+  inset: -4%;
+  background: url("/art/title.jpg") 50% 58% / cover no-repeat;
+  filter: saturate(0.92) brightness(0.82);
+  transform-origin: 50% 60%;
+  animation: descent-push 22s cubic-bezier(0.22, 0.6, 0.3, 1) both;
+}
 
-.descent-copy {
+@keyframes descent-push {
+  from { transform: scale(1.02); }
+  to { transform: scale(1.32); }
+}
+
+.descent-light {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(60% 55% at 50% 62%, rgba(255, 196, 120, 0.2), rgba(126, 240, 224, 0.1) 45%, transparent 75%);
+  mix-blend-mode: screen;
+  animation: descent-flicker 3.2s ease-in-out infinite;
+}
+
+@keyframes descent-flicker {
+  0%, 100% { opacity: 0.85; }
+  18% { opacity: 1; }
+  34% { opacity: 0.78; }
+  57% { opacity: 0.96; }
+  76% { opacity: 0.82; }
+}
+
+.descent-dust { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+.descent-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.09;
+  mix-blend-mode: overlay;
+  background-size: 128px 128px;
+  pointer-events: none;
+}
+
+.descent-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 45%, transparent 40%, rgba(5, 6, 11, 0.82) 100%),
+    linear-gradient(180deg, rgba(5, 6, 11, 0.35), transparent 22%, transparent 55%, rgba(5, 6, 11, 0.94) 100%);
+  transition: background 1s ease;
+}
+
+.descent-dossier {
+  position: absolute;
+  left: 22px;
+  bottom: 22px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100% - 44px);
+}
+
+.descent-medallion {
+  position: relative;
+  width: 62px;
+  height: 62px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1px solid rgba(231, 195, 106, 0.55);
+  background: radial-gradient(circle at 50% 35%, rgba(24, 34, 44, 0.95), rgba(8, 10, 16, 0.98));
+  box-shadow: 0 0 0 4px rgba(5, 6, 11, 0.55), 0 8px 24px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.descent-portrait {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  width: 54px;
+  height: 66px;
+  transform: translateX(-50%);
+  object-fit: cover;
+  object-position: center top;
+}
+
+.descent-crest {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--gold);
+  background: rgba(5, 6, 11, 0.85);
+}
+
+.descent-who { min-width: 0; }
+.descent-name { margin: 0; font-family: Palatino, "Iowan Old Style", Georgia, serif; font-size: 1.25rem; letter-spacing: 0.02em; }
+.descent-kit { margin: 2px 0 0; color: var(--muted); font-size: 0.8rem; letter-spacing: 0.04em; }
+
+.descent-progress {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
-  padding: 36px 20px calc(22px + env(safe-area-inset-bottom));
-  text-align: center;
-  background: linear-gradient(180deg, rgba(5, 6, 11, 0), rgba(5, 6, 11, 0.9) 60%);
+  bottom: 24px;
+  padding: 0 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  text-align: right;
+  pointer-events: none;
 }
 
-.descent-title {
+.descent-steps {
+  display: flex;
+  gap: 18px;
   margin: 0;
-  font-family: Palatino, "Iowan Old Style", Georgia, serif;
-  font-size: 1.5rem;
-  letter-spacing: 0.04em;
+  padding: 0;
+  list-style: none;
 }
 
-.descent-stage { margin: 4px 0 0; color: var(--cyan); font-size: 0.95rem; }
-.descent-tip { margin: 10px auto 0; max-width: 46ch; color: var(--muted); font-size: 0.86rem; min-height: 2.6em; opacity: 0; transition: opacity 500ms ease; }
+.descent-step { display: flex; align-items: center; gap: 7px; color: rgba(163, 152, 140, 0.55); font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase; }
+.descent-step-dot { width: 7px; height: 7px; border-radius: 50%; border: 1px solid currentColor; }
+.descent-step.is-active { color: var(--cyan); }
+.descent-step.is-active .descent-step-dot { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); animation: descent-pulse 1.4s ease-in-out infinite; }
+.descent-step.is-done { color: var(--gold); }
+.descent-step.is-done .descent-step-dot { background: var(--gold); border-color: var(--gold); }
+
+@keyframes descent-pulse { 50% { opacity: 0.35; transform: scale(0.8); } }
+
+.descent-status { margin: 0; font-size: 0.95rem; letter-spacing: 0.04em; }
+.descent-tip { margin: 0; max-width: 44ch; color: var(--muted); font-size: 0.82rem; min-height: 2.4em; opacity: 0; transition: opacity 600ms ease; }
 .descent-tip.is-in { opacity: 1; }
 
+/* The dive: the camera drops into the dark of the shaft. */
+.descent.is-diving .descent-art { animation: descent-dive 1.2s cubic-bezier(0.55, 0, 0.9, 0.4) both; }
+.descent.is-diving .descent-dossier,
+.descent.is-diving .descent-progress { opacity: 0; transition: opacity 500ms ease; }
+.descent.is-diving::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #05060b;
+  opacity: 0;
+  animation: descent-fade 1.2s ease-in 0.2s both;
+}
+
+@keyframes descent-dive {
+  from { transform: scale(1.32); }
+  to { transform: scale(3.4); }
+}
+
+@keyframes descent-fade { to { opacity: 1; } }
+
+@media (max-width: 700px) {
+  .descent-dossier { bottom: auto; top: 18px; left: 16px; }
+  .descent-progress { padding: 0 16px; align-items: flex-start; text-align: left; bottom: 18px; }
+  .descent-steps { gap: 12px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .descent { animation: none; }
+  .descent, .descent-art, .descent-light { animation: none; }
   .descent-tip { transition: none; }
+  .descent.is-diving .descent-art { animation: none; }
 }

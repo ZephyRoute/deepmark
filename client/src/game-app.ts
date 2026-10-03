@@ -32,6 +32,7 @@ import {
 import { loadDraft, loadoutOf, type Draft } from './game/draft';
 import { MAX_FLOOR } from './game/floor';
 import { HEROES, HERO_ORDER } from './game/heroes';
+import { CHARMS, WEAPONS } from './game/items';
 import { cloakFilter } from './render/emblems';
 import type { DescentOptions, DescentStage } from './render/descent';
 import { rankForClears, type Loadout, type Look } from './game/loadout';
@@ -93,7 +94,9 @@ let chainRead: ChainRead = 'loading';
 const START_TIMEOUT_MS = 50_000;
 const START_RETRIES = 3;
 /** The stairs-open beat before the first floor appears, so the scene resolves instead of cutting. */
-const READY_HOLD_MS = 1100;
+const READY_HOLD_MS = 1400;
+/** The scene always plays at least this long, so a fast network never shows a flash of it. */
+const MIN_SCENE_MS = 3200;
 const START_RETRY_MS = 6_000;
 const LEADERBOARD_ROWS = 10;
 
@@ -234,11 +237,19 @@ async function beginRun(plan: DelverPlan): Promise<void> {
   if (starting) return;
   starting = true;
   startStage = 'account';
+  const openedAt = performance.now();
   const heroId = HERO_ORDER[plan.loadout.base] ?? 'lantern';
   descent = {
     art: HEROES[heroId].art,
     filter: cloakFilter(plan.look.cloak, plan.loadout.base),
     name: plan.look.name,
+    emblem: plan.look.emblem,
+    kit: [
+      HEROES[heroId].name,
+      WEAPONS[plan.loadout.weapon]?.name ?? '',
+      CHARMS[plan.loadout.charm]?.name ?? '',
+      ...(plan.loadout.rank > 0 ? [`Veteran rank ${plan.loadout.rank}`] : []),
+    ].join('  ·  '),
   };
   chainStatus = '';
   chainTx = '';
@@ -262,6 +273,7 @@ async function beginRun(plan: DelverPlan): Promise<void> {
       }),
       START_TIMEOUT_MS
     );
+    await sleep(Math.max(0, MIN_SCENE_MS - (performance.now() - openedAt)));
     startStage = 'ready';
     sfxDescend();
     await sleep(READY_HOLD_MS);
@@ -273,6 +285,7 @@ async function beginRun(plan: DelverPlan): Promise<void> {
     practice = false;
   } catch (err) {
     console.warn('Deepmark: could not open a verified run, starting a practice run', err);
+    await sleep(Math.max(0, MIN_SCENE_MS - (performance.now() - openedAt)));
     startStage = 'offline';
     await sleep(READY_HOLD_MS + 600);
     resetMotion();
