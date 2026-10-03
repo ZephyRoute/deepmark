@@ -56,7 +56,7 @@ pub enum Error {
 impl From<SimError> for Error {
     fn from(value: SimError) -> Self {
         match value {
-            SimError::UnknownHero => Error::InvalidHero,
+            SimError::UnknownLoadout => Error::InvalidHero,
             SimError::UnknownAction => Error::InvalidAction,
             SimError::Incomplete => Error::RunIncomplete,
             SimError::TrailingActions => Error::TrailingActions,
@@ -116,7 +116,7 @@ impl DeepmarkContract {
     /// is open forfeits the old one, which stays on the profile.
     pub fn start_run(env: Env, player: Address, hero: u32) -> Result<RunTicket, Error> {
         player.require_auth();
-        if world::hero(hero).is_none() {
+        if hero >= world::BASE_COUNT {
             return Err(Error::InvalidHero);
         }
 
@@ -185,7 +185,7 @@ impl DeepmarkContract {
             return Err(Error::TooFast);
         }
 
-        let outcome = sim::replay(ticket.hero, ticket.seed, actions.iter())?;
+        let outcome = sim::replay(&world::Loadout { base: ticket.hero, weapon: 2, charm: 2, rank: 0 }, ticket.seed, actions.iter())?;
         let key = rank_key(&outcome);
         env.storage().temporary().remove(&run_key);
 
@@ -229,7 +229,7 @@ impl DeepmarkContract {
         if actions.len() > MAX_ACTIONS {
             return Err(Error::TooManyActions);
         }
-        let outcome = sim::replay(hero, seed, actions.iter())?;
+        let outcome = sim::replay(&world::Loadout { base: hero, weapon: 2, charm: 2, rank: 0 }, seed, actions.iter())?;
         Ok(to_contract_outcome(&outcome, rank_key(&outcome)))
     }
 

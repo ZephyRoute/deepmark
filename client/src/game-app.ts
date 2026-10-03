@@ -16,7 +16,8 @@ import {
   sfxHitPlayer,
   sfxRelic,
 } from './render/audio';
-import { loadHero, saveHero, type HeroId } from './game/heroes';
+import { HERO_ORDER, loadHero, saveHero, type HeroId } from './game/heroes';
+import type { Loadout } from './game/loadout';
 import { getPlayerKeypair } from './stellar/account';
 import {
   CONTRACT_ERROR,
@@ -139,6 +140,11 @@ async function openLeaderboard(): Promise<void> {
   }
 }
 
+/** Until the creator screen lands, every delver carries the same middling kit. */
+function starterLoadout(id: HeroId): Loadout {
+  return { base: Math.max(0, HERO_ORDER.indexOf(id)), weapon: 2, charm: 2, rank: 0 };
+}
+
 /** Opens a run on chain so the contract issues the seed. Falls back to a practice run. */
 async function beginRun(): Promise<void> {
   if (starting) return;
@@ -165,12 +171,12 @@ async function beginRun(): Promise<void> {
       START_TIMEOUT_MS
     );
     resetMotion();
-    run = newRun(chosen, ticket.seed);
+    run = newRun(starterLoadout(chosen), ticket.seed);
     practice = false;
   } catch (err) {
     console.warn('Deepmark: could not open a verified run, starting a practice run', err);
     resetMotion();
-    run = newRun(chosen);
+    run = newRun(starterLoadout(chosen));
     practice = true;
   } finally {
     starting = false;

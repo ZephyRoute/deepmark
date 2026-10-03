@@ -155,7 +155,7 @@ fn a_verified_run_updates_the_record_and_consumes_the_run() {
     assert!(outcome.extracted);
     assert_eq!(outcome.floor_reached, 1);
     assert_eq!(outcome.score, 0);
-    assert_eq!(outcome.hp_left, 10);
+    assert_eq!(outcome.hp_left, 13);
     assert_eq!(outcome.actions as usize, log.len());
 
     let record = f.client.get_record(&player).unwrap();

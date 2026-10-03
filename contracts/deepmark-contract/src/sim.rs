@@ -9,8 +9,8 @@
 
 use crate::rng::Mulberry32;
 use crate::world::{
-    archetype, floor, hero, is_walkable, relic_value, EnemyKind, Floor, Hero, Point, RelicKind,
-    MAX_FLOOR,
+    archetype, floor, is_walkable, relic_value, stats_for, EnemyKind, Floor, Loadout, Point,
+    RelicKind, Stats, MAX_FLOOR,
 };
 
 pub const ACTION_UP: u8 = 0;
@@ -26,7 +26,7 @@ const MAX_ENEMIES_PER_FLOOR: usize = 2;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SimError {
-    UnknownHero,
+    UnknownLoadout,
     UnknownAction,
     /// The log ended before the run reached extraction or death.
     Incomplete,
@@ -69,7 +69,7 @@ struct EnemyState {
 }
 
 struct Sim {
-    hero: Hero,
+    stats: Stats,
     rng: Mulberry32,
     mode: Mode,
     floor: &'static Floor,
@@ -86,15 +86,15 @@ struct Sim {
 }
 
 impl Sim {
-    fn new(hero: Hero, seed: u32) -> Self {
+    fn new(stats: Stats, seed: u32) -> Self {
         let first = floor(1);
         Sim {
-            hero,
+            stats,
             rng: Mulberry32::new(seed),
             mode: Mode::Explore,
             floor: first,
             player: first.start,
-            hp: hero.max_hp,
+            hp: stats.max_hp,
             enemies: spawn_enemies(first),
             active: None,
             relic_taken: false,
@@ -173,7 +173,7 @@ impl Sim {
         };
         let arch = archetype(enemy.kind);
 
-        let dealt = self.rng.rand_int(self.hero.dmg_min, self.hero.dmg_max) as i32;
+        let dealt = self.rng.rand_int(self.stats.dmg_min, self.stats.dmg_max) as i32;
         enemy.hp = (enemy.hp - dealt).max(0);
 
         if enemy.hp <= 0 {
@@ -248,12 +248,12 @@ fn spawn_enemies(floor: &Floor) -> [Option<EnemyState>; MAX_ENEMIES_PER_FLOOR] {
 /// Replay a whole run. The log must end exactly on the action that finishes
 /// it: no unfinished runs and no padding after the end.
 pub fn replay<I: Iterator<Item = u8>>(
-    hero_id: u32,
+    loadout: &Loadout,
     seed: u32,
     actions: I,
 ) -> Result<Outcome, SimError> {
-    let hero = hero(hero_id).ok_or(SimError::UnknownHero)?;
-    let mut sim = Sim::new(hero, seed);
+    let stats = stats_for(loadout).ok_or(SimError::UnknownLoadout)?;
+    let mut sim = Sim::new(stats, seed);
     let mut count: u32 = 0;
 
     for action in actions {
@@ -282,8 +282,13 @@ mod tests {
     use super::*;
     use std::{vec, vec::Vec};
 
-    fn run(hero_id: u32, seed: u32, actions: &[u8]) -> Result<Outcome, SimError> {
-        replay(hero_id, seed, actions.iter().copied())
+    /// A plain kit for a base: Bulwark Pike and Stone Heart, rank 0.
+    fn plain(base: u32) -> Loadout {
+        Loadout { base, weapon: 2, charm: 2, rank: 0 }
+    }
+
+    fn run(base: u32, seed: u32, actions: &[u8]) -> Result<Outcome, SimError> {
+        replay(&plain(base), seed, actions.iter().copied())
     }
 
     fn repeat(action: u8, times: usize) -> Vec<u8> {
@@ -302,8 +307,8 @@ mod tests {
     }
 
     #[test]
-    fn rejects_an_unknown_hero() {
-        assert_eq!(run(9, 1, &[]), Err(SimError::UnknownHero));
+    fn rejects_an_unknown_loadout() {
+        assert_eq!(run(9, 1, &[]), Err(SimError::UnknownLoadout));
     }
 
     #[test]
@@ -324,7 +329,7 @@ mod tests {
         assert_eq!(out.ending, Ending::Extracted);
         assert_eq!(out.floor_reached, 1);
         assert_eq!(out.score, 0);
-        assert_eq!(out.hp_left, 10);
+        assert_eq!(out.hp_left, 13);
         assert_eq!(out.actions as usize, log.len());
     }
 
@@ -373,7 +378,9 @@ mod tests {
 
     #[test]
     fn dying_zeroes_the_banked_relics_and_score() {
-        // Cinder (8 hp) against the floor 2 Adept can lose. Search seeds for a death.
+        // A glass cannon (Cinder, Reaver Hook, Keen Eye: 3 hp) against the floor 2 Adept
+        // can lose. Search seeds for a death.
+        let glass = Loadout { base: 1, weapon: 1, charm: 1, rank: 0 };
         let mut found = false;
         for seed in 0..20_000u32 {
             for attacks in 1..=6 {
@@ -381,7 +388,7 @@ mod tests {
                 log.push(ACTION_DESCEND);
                 log.extend(repeat(ACTION_RIGHT, 4));
                 log.extend(repeat(ACTION_ATTACK, attacks));
-                let Ok(out) = run(1, seed, &log) else {
+                let Ok(out) = replay(&glass, seed, log.iter().copied()) else {
                     continue;
                 };
                 if out.ending == Ending::Dead {

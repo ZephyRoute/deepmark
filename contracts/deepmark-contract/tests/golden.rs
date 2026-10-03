@@ -2,6 +2,7 @@
 //! golden vector. Regenerate the file with `bun run golden` in `client/`.
 
 use deepmark_contract::sim::{replay, Ending};
+use deepmark_contract::world::Loadout;
 
 const VECTORS: &str = include_str!("golden.txt");
 
@@ -13,25 +14,30 @@ fn rust_replay_matches_every_typescript_vector() {
             continue;
         }
         let f: Vec<&str> = line.split(' ').collect();
-        assert_eq!(f.len(), 11, "line {}: expected 11 fields", number + 1);
+        assert_eq!(f.len(), 14, "line {}: expected 14 fields", number + 1);
 
-        let hero: u32 = f[0].parse().unwrap();
-        let seed: u32 = f[1].parse().unwrap();
-        let actions = f[2].bytes().map(|b| b - b'0');
-        let ending = if f[3] == "E" {
+        let loadout = Loadout {
+            base: f[0].parse().unwrap(),
+            weapon: f[1].parse().unwrap(),
+            charm: f[2].parse().unwrap(),
+            rank: f[3].parse().unwrap(),
+        };
+        let seed: u32 = f[4].parse().unwrap();
+        let actions = f[5].bytes().map(|b| b - b'0');
+        let ending = if f[6] == "E" {
             Ending::Extracted
         } else {
             Ending::Dead
         };
-        let floor: u32 = f[4].parse().unwrap();
-        let common: u32 = f[5].parse().unwrap();
-        let rare: u32 = f[6].parse().unwrap();
-        let core: u32 = f[7].parse().unwrap();
-        let score: u32 = f[8].parse().unwrap();
-        let hp: u32 = f[9].parse().unwrap();
-        let count: u32 = f[10].parse().unwrap();
+        let floor: u32 = f[7].parse().unwrap();
+        let common: u32 = f[8].parse().unwrap();
+        let rare: u32 = f[9].parse().unwrap();
+        let core: u32 = f[10].parse().unwrap();
+        let score: u32 = f[11].parse().unwrap();
+        let hp: u32 = f[12].parse().unwrap();
+        let count: u32 = f[13].parse().unwrap();
 
-        let out = replay(hero, seed, actions)
+        let out = replay(&loadout, seed, actions)
             .unwrap_or_else(|e| panic!("line {}: replay failed {:?}", number + 1, e));
 
         assert_eq!(out.ending, ending, "line {}: ending", number + 1);
@@ -45,7 +51,7 @@ fn rust_replay_matches_every_typescript_vector() {
         checked += 1;
     }
     assert!(
-        checked >= 400,
-        "expected at least 400 vectors, found {checked}"
+        checked >= 600,
+        "expected at least 600 vectors, found {checked}"
     );
 }

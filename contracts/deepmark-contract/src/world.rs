@@ -13,30 +13,91 @@ pub struct Point {
     pub y: i32,
 }
 
+pub const MAX_RANK: u32 = 3;
+pub const NAME_MIN: usize = 3;
+pub const NAME_MAX: usize = 16;
+pub const EMBLEM_COUNT: u32 = 6;
+pub const CLOAK_COUNT: u32 = 6;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct Hero {
+pub struct Modifier {
+    pub hp: i32,
+    pub dmg_min: i32,
+    pub dmg_max: i32,
+}
+
+/// Base delvers, in the order the client uses: 0 Lantern, 1 Cinder.
+const BASES: [Modifier; 2] = [
+    Modifier { hp: 10, dmg_min: 2, dmg_max: 4 },
+    Modifier { hp: 8, dmg_min: 3, dmg_max: 5 },
+];
+
+/// Mirrors `WEAPONS` and `CHARMS` in `client/src/game/items.ts`.
+const WEAPONS: [Modifier; 3] = [
+    Modifier { hp: -2, dmg_min: 1, dmg_max: 0 },
+    Modifier { hp: -2, dmg_min: 0, dmg_max: 2 },
+    Modifier { hp: 2, dmg_min: 0, dmg_max: -1 },
+];
+const CHARMS: [Modifier; 3] = [
+    Modifier { hp: 3, dmg_min: -1, dmg_max: 0 },
+    Modifier { hp: -3, dmg_min: 1, dmg_max: 1 },
+    Modifier { hp: 1, dmg_min: 0, dmg_max: 0 },
+];
+
+pub const BASE_COUNT: u32 = BASES.len() as u32;
+pub const WEAPON_COUNT: u32 = WEAPONS.len() as u32;
+pub const CHARM_COUNT: u32 = CHARMS.len() as u32;
+
+/// What a delver carries into a run. `rank` is the victories an owned delver
+/// has earned, capped at `MAX_RANK`; a fresh delver is rank 0.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Loadout {
+    pub base: u32,
+    pub weapon: u32,
+    pub charm: u32,
+    pub rank: u32,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Stats {
     pub max_hp: i32,
     pub dmg_min: u32,
     pub dmg_max: u32,
 }
 
-pub const HERO_LANTERN: u32 = 0;
-pub const HERO_CINDER: u32 = 1;
-
-pub fn hero(id: u32) -> Option<Hero> {
-    match id {
-        HERO_LANTERN => Some(Hero {
-            max_hp: 10,
-            dmg_min: 2,
-            dmg_max: 4,
-        }),
-        HERO_CINDER => Some(Hero {
-            max_hp: 8,
-            dmg_min: 3,
-            dmg_max: 5,
-        }),
-        _ => None,
+/// The one place a delver's numbers are computed. Mirrors `statsFor` in
+/// `client/src/game/loadout.ts`. Returns `None` for an index that does not exist.
+pub fn stats_for(loadout: &Loadout) -> Option<Stats> {
+    let base = BASES.get(loadout.base as usize)?;
+    let weapon = WEAPONS.get(loadout.weapon as usize)?;
+    let charm = CHARMS.get(loadout.charm as usize)?;
+    if loadout.rank > MAX_RANK {
+        return None;
     }
+    let max_hp = (base.hp + weapon.hp + charm.hp + loadout.rank as i32).max(1);
+    let dmg_min = (base.dmg_min + weapon.dmg_min + charm.dmg_min).max(1);
+    let dmg_max = (base.dmg_max + weapon.dmg_max + charm.dmg_max).max(dmg_min);
+    Some(Stats { max_hp, dmg_min: dmg_min as u32, dmg_max: dmg_max as u32 })
+}
+
+/// Letters, digits and single spaces, 3 to 16 characters. Mirrors `isValidName`.
+pub fn is_valid_name(bytes: &[u8]) -> bool {
+    if bytes.len() < NAME_MIN || bytes.len() > NAME_MAX {
+        return false;
+    }
+    let mut previous_space = true;
+    for (i, b) in bytes.iter().enumerate() {
+        let alnum = b.is_ascii_alphanumeric();
+        let space = *b == b' ';
+        if !alnum && !space {
+            return false;
+        }
+        if space && (previous_space || i == bytes.len() - 1) {
+            return false;
+        }
+        previous_space = space;
+    }
+    true
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -278,23 +339,50 @@ mod tests {
     }
 
     #[test]
-    fn heroes_match_the_shipped_stats() {
-        assert_eq!(
-            hero(HERO_LANTERN),
-            Some(Hero {
-                max_hp: 10,
-                dmg_min: 2,
-                dmg_max: 4
-            })
-        );
-        assert_eq!(
-            hero(HERO_CINDER),
-            Some(Hero {
-                max_hp: 8,
-                dmg_min: 3,
-                dmg_max: 5
-            })
-        );
-        assert_eq!(hero(2), None);
+    fn base_stats_match_the_shipped_delvers() {
+        let lantern = stats_for(&Loadout { base: 0, weapon: 2, charm: 2, rank: 0 }).unwrap();
+        assert_eq!(lantern, Stats { max_hp: 13, dmg_min: 2, dmg_max: 3 });
+        let cinder = stats_for(&Loadout { base: 1, weapon: 0, charm: 2, rank: 3 }).unwrap();
+        assert_eq!(cinder, Stats { max_hp: 10, dmg_min: 4, dmg_max: 5 });
+    }
+
+    #[test]
+    fn rank_adds_one_hit_point_each() {
+        let at = |rank| stats_for(&Loadout { base: 0, weapon: 2, charm: 2, rank }).unwrap().max_hp;
+        assert_eq!(at(1) - at(0), 1);
+        assert_eq!(at(3) - at(0), 3);
+    }
+
+    #[test]
+    fn invalid_indices_and_ranks_are_rejected() {
+        assert_eq!(stats_for(&Loadout { base: 2, weapon: 0, charm: 0, rank: 0 }), None);
+        assert_eq!(stats_for(&Loadout { base: 0, weapon: 3, charm: 0, rank: 0 }), None);
+        assert_eq!(stats_for(&Loadout { base: 0, weapon: 0, charm: 3, rank: 0 }), None);
+        assert_eq!(stats_for(&Loadout { base: 0, weapon: 0, charm: 0, rank: 4 }), None);
+    }
+
+    #[test]
+    fn stats_never_fall_below_one_and_max_never_under_min() {
+        for base in 0..BASE_COUNT {
+            for weapon in 0..WEAPON_COUNT {
+                for charm in 0..CHARM_COUNT {
+                    let s = stats_for(&Loadout { base, weapon, charm, rank: 0 }).unwrap();
+                    assert!(s.max_hp >= 1 && s.dmg_min >= 1 && s.dmg_max >= s.dmg_min);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn names_follow_the_shipped_rule() {
+        assert!(is_valid_name(b"Ash"));
+        assert!(is_valid_name(b"Mara Voss 2"));
+        assert!(!is_valid_name(b"Al"));
+        assert!(!is_valid_name(b"A very long delver name"));
+        assert!(!is_valid_name(b" Ash"));
+        assert!(!is_valid_name(b"Ash "));
+        assert!(!is_valid_name(b"Ash  Voss"));
+        assert!(!is_valid_name(b"Ash-Voss"));
+        assert!(!is_valid_name("Ash\u{e9}".as_bytes()));
     }
 }

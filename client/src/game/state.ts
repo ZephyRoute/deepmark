@@ -1,7 +1,8 @@
 import { resolveExchange } from './combat';
 import { ENEMIES, type EnemyKind } from './enemies';
 import { buildFloor, isWalkable, MAX_FLOOR, type FloorLayout, type RelicKind } from './floor';
-import { HEROES, type HeroId } from './heroes';
+import { HERO_ORDER, HEROES, type HeroId } from './heroes';
+import { statsFor, type Look, type Loadout, type Stats } from './loadout';
 import { recordRun } from './progress';
 import { mulberry32, freshSeed, type Rng } from './rng';
 
@@ -58,6 +59,9 @@ export type GameEvent =
 export interface RunState {
   mode: Mode;
   heroId: HeroId;
+  loadout: Loadout;
+  stats: Stats;
+  look: Look;
   seed: number;
   rng: Rng;
   floorNumber: number;
@@ -95,18 +99,25 @@ function fromLayout(layout: FloorLayout): { enemies: EnemyState[]; relics: Relic
   };
 }
 
-export function newRun(heroId: HeroId = 'lantern', seed: number = freshSeed()): RunState {
+export const DEFAULT_LOOK: Look = { name: 'Delver', emblem: 0, cloak: 0 };
+
+export function newRun(loadout: Loadout, seed: number = freshSeed(), look: Look = DEFAULT_LOOK): RunState {
+  const heroId = HERO_ORDER[loadout.base] ?? 'lantern';
   const hero = HEROES[heroId];
+  const stats = statsFor(loadout);
   const layout = buildFloor(1);
   const { enemies, relics } = fromLayout(layout);
   return {
     mode: 'explore',
     heroId,
+    loadout,
+    stats,
+    look,
     seed,
     rng: mulberry32(seed),
     floorNumber: 1,
     layout,
-    player: { ...layout.playerStart, hp: hero.maxHp, maxHp: hero.maxHp },
+    player: { ...layout.playerStart, hp: stats.maxHp, maxHp: stats.maxHp },
     enemies,
     activeEnemyIndex: null,
     relics,
@@ -204,15 +215,14 @@ function attack(state: RunState): boolean {
   const enemy = state.enemies[state.activeEnemyIndex];
   if (!enemy) return false;
   const archetype = ENEMIES[enemy.kind];
-  const hero = HEROES[state.heroId];
   const result = resolveExchange(
     state.rng,
     state.player.hp,
     enemy.hp,
     archetype.dmgMin,
     archetype.dmgMax,
-    hero.dmgMin,
-    hero.dmgMax
+    state.stats.dmgMin,
+    state.stats.dmgMax
   );
 
   enemy.hp = Math.max(0, enemy.hp - result.playerDamageDealt);

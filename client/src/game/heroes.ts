@@ -1,5 +1,8 @@
 export type HeroId = 'lantern' | 'cinder';
 
+/** Order matches the base codes the contract uses: 0 Lantern, 1 Cinder. */
+export const HERO_ORDER: readonly HeroId[] = ['lantern', 'cinder'];
+
 export interface Hero {
   id: HeroId;
   name: string;
