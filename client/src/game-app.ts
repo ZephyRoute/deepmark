@@ -11,7 +11,9 @@ import {
   type OnchainSnapshot,
 } from './render/chrome';
 import './styles.css';
-import { spawnPopup, triggerShake } from './render/effects';
+import { flashActor, spawnBurst, spawnPopup, triggerShake } from './render/effects';
+import { showBanner } from './render/banner';
+import type { VerifyState } from './render/result';
 import {
   sfxDead,
   sfxDescend,
@@ -20,7 +22,11 @@ import {
   sfxFloorCleared,
   sfxHitEnemy,
   sfxHitPlayer,
+  sfxBanner,
   sfxBossIntro,
+  sfxHeartbeat,
+  sfxHeroEarned,
+  sfxSeal,
   sfxRelic,
   sfxStep,
   sfxUi,
@@ -78,6 +84,13 @@ let vaultLoading = false;
 let boardTab: BoardTab = 'fresh';
 let chainHeroId: number | null = null;
 let canRetry = false;
+let verifyState: VerifyState = 'pending';
+let runId = 0;
+
+const FLOOR_NAMES: Record<number, string> = { 1: 'The Reliquary', 2: 'The Drowned Chapel', 3: 'The Obsidian Crypt' };
+const HEARTBEAT_MS = 1100;
+const LOW_HEALTH = 0.34;
+let lastHeartbeat = 0;
 let failedRun: RunState | null = null;
 let runWasVeteran = false;
 let showLeaderboard = false;
@@ -279,6 +292,7 @@ async function beginRun(plan: DelverPlan): Promise<void> {
     await sleep(READY_HOLD_MS);
     resetMotion();
     startAmbience(1);
+    showBanner('Floor 1', FLOOR_NAMES[1] ?? '');
     // The ticket is authoritative: the contract fixed the delver and the seed.
     const loadout: Loadout = { base: ticket.base, weapon: ticket.weapon, charm: ticket.charm, rank: ticket.rank };
     run = newRun(loadout, ticket.seed, ticket.look);
@@ -290,6 +304,7 @@ async function beginRun(plan: DelverPlan): Promise<void> {
     await sleep(READY_HOLD_MS + 600);
     resetMotion();
     startAmbience(1);
+    showBanner('Floor 1', FLOOR_NAMES[1] ?? '');
     run = newRun(plan.loadout, undefined, plan.look);
     practice = true;
   } finally {
@@ -331,6 +346,7 @@ async function submitLog(finished: RunState): Promise<FinishedRun> {
     } catch (err) {
       if (isPermanentFailure(err) || attempt >= VERIFY_ATTEMPTS - 1) throw err;
       chainStatus = 'Waiting for Stellar to settle this run...';
+      verifyState = 'waiting';
       await sleep(VERIFY_RETRY_MS);
     }
   }
@@ -338,6 +354,7 @@ async function submitLog(finished: RunState): Promise<FinishedRun> {
 
 async function verifyOnChain(finished: RunState): Promise<void> {
   chainStatus = 'Verifying on Stellar...';
+  verifyState = 'pending';
   canRetry = false;
   let settled: FinishedRun;
   try {
@@ -345,6 +362,7 @@ async function verifyOnChain(finished: RunState): Promise<void> {
   } catch (err) {
     console.warn('Deepmark: failed to verify this run on-chain', err);
     chainStatus = describeFailure(err);
+    verifyState = 'failed';
     canRetry = !isPermanentFailure(err);
     failedRun = finished;
     return;
@@ -363,6 +381,9 @@ async function verifyOnChain(finished: RunState): Promise<void> {
     relicsMatch;
   if (!agrees) console.error('Deepmark: the contract result differs from the local simulation', outcome);
   chainStatus = agrees ? 'Verified on Stellar' : 'Verified on Stellar (this browser disagreed, the chain result stands)';
+  verifyState = 'verified';
+  sfxSeal();
+  if (chainHeroId !== null) window.setTimeout(sfxHeroEarned, 900);
 
   // The run is settled. Anything below only decorates the result screen, so a
   // failure here must never turn a confirmed transaction into an error.
@@ -397,27 +418,37 @@ const DIRS: Partial<Record<Action, [number, number]>> = {
 
 function handleEvent(event: GameEvent): void {
   switch (event.type) {
-    case 'enemyHit':
-      if (run) playAttack('player', run.player.x, run.player.y);
+    case 'enemyHit': {
+      if (run) {
+        playAttack('player', run.player.x, run.player.y);
+        const struck = run.enemies.findIndex((e) => e.x === event.x && e.y === event.y);
+        if (struck >= 0) flashActor(`enemy-${struck}`);
+      }
       spawnPopup(event.x, event.y, `-${event.amount}`, '#e5e7eb');
+      spawnBurst(event.x, event.y, 'hit');
       sfxHitEnemy();
-      triggerShake(100, 4);
+      triggerShake(100 + event.amount * 12, 3 + event.amount);
       break;
+    }
     case 'playerHit':
       if (run && run.activeEnemyIndex !== null) {
         const enemy = run.enemies[run.activeEnemyIndex];
         if (enemy) playAttack(`enemy-${run.activeEnemyIndex}`, enemy.x, enemy.y);
       }
       spawnPopup(event.x, event.y, `-${event.amount}`, '#ef5350');
+      flashActor('player');
+      spawnBurst(event.x, event.y, 'hit');
       sfxHitPlayer();
-      triggerShake(150, 7);
+      triggerShake(150 + event.amount * 15, 5 + event.amount * 1.5);
       break;
     case 'enemyDied':
+      spawnBurst(event.x, event.y, 'kill');
       sfxEnemyDied();
       triggerShake(120, 5);
       break;
     case 'relic':
       spawnPopup(event.x, event.y, '+relic', '#ffca28');
+      spawnBurst(event.x, event.y, 'relic');
       sfxRelic(event.kind);
       break;
     case 'floorCleared':
@@ -427,12 +458,19 @@ function handleEvent(event: GameEvent): void {
       resetMotion();
       sfxDescend();
       startAmbience(event.floor);
+      showBanner(
+        `Floor ${event.floor}`,
+        event.floor >= MAX_FLOOR ? 'The Obsidian Crypt. Warden Prime waits.' : FLOOR_NAMES[event.floor] ?? '',
+        event.floor >= MAX_FLOOR ? 'boss' : 'floor'
+      );
       if (event.floor >= MAX_FLOOR) sfxBossIntro();
+      else sfxBanner();
       break;
     case 'extracted':
       stopAmbience();
       sfxExtracted();
       progress = loadProgress();
+      runId += 1;
       if (run && !practice) void verifyOnChain(run);
       break;
     case 'dead':
@@ -440,6 +478,7 @@ function handleEvent(event: GameEvent): void {
       sfxDead();
       triggerShake(250, 10);
       progress = loadProgress();
+      runId += 1;
       if (run && !practice) void verifyOnChain(run);
       break;
     case 'combatStart':
@@ -518,6 +557,15 @@ onAction((action) => {
       canRetry = false;
     }
     if (action === 'retryVerify' && failedRun) void verifyOnChain(failedRun);
+    if (action === 'vault') {
+      resetMotion();
+      run = null;
+      chainStatus = '';
+      chainTx = '';
+      chainRank = null;
+      canRetry = false;
+      void openVault();
+    }
     return;
   }
 
@@ -541,6 +589,13 @@ onAction((action) => {
 });
 
 function frame(): void {
+  if (run && run.mode !== 'result' && !showLeaderboard && !showStats && run.player.hp / run.player.maxHp <= LOW_HEALTH) {
+    const now = performance.now();
+    if (now - lastHeartbeat > HEARTBEAT_MS) {
+      lastHeartbeat = now;
+      sfxHeartbeat();
+    }
+  }
   if (run && !showLeaderboard && !showStats && run.mode !== 'result') drawWorld(ctx, run);
   else {
     ctx.fillStyle = '#07080e';
@@ -571,6 +626,8 @@ function frame(): void {
     boardTab,
     chainHeroId,
     canRetry,
+    verifyState,
+    runId,
     showLeaderboard,
     showStats,
     leaderboardLoading,

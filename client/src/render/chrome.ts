@@ -10,6 +10,7 @@ import { STELLAR_CONFIG } from '../stellar/config';
 import type { Hero } from '../stellar/contract';
 import { mountCreator, type CreatorHooks } from './creator';
 import { cloakFilter, emblemIcon } from './emblems';
+import { mountResult, updateVerification, type ResultSummary, type Verification, type VerifyState } from './result';
 import { mountDescent, setDescentStage, type DescentOptions, type DescentStage } from './descent';
 import type { RelicBalances } from '../stellar/relics';
 
@@ -48,6 +49,8 @@ export interface ChromeView {
   boardTab: BoardTab;
   chainHeroId: number | null;
   canRetry: boolean;
+  verifyState: VerifyState;
+  runId: number;
   showLeaderboard: boolean;
   showStats: boolean;
   leaderboardLoading: boolean;
@@ -107,6 +110,30 @@ function setText(id: string, value: string): void {
   if (node && node.textContent !== value) node.textContent = value;
 }
 
+/** Sets text and, if it changed, replays a small pop so gains are felt. */
+function setBumpText(id: string, value: string): void {
+  const node = document.getElementById(id);
+  if (!node || node.textContent === value) return;
+  const first = node.textContent === '';
+  node.textContent = value;
+  if (first) return;
+  node.classList.remove('bump');
+  void node.offsetWidth;
+  node.classList.add('bump');
+}
+
+function paintHp(hp: number, max: number): void {
+  const ratio = max > 0 ? Math.max(0, Math.min(1, hp / max)) : 0;
+  const fill = document.getElementById('hp-fill');
+  const ghost = document.getElementById('hp-ghost');
+  const bar = document.getElementById('hud-hp');
+  const pct = `${(ratio * 100).toFixed(1)}%`;
+  if (fill) fill.style.width = pct;
+  if (ghost) ghost.style.width = pct;
+  if (bar) bar.classList.toggle('is-low', ratio <= 0.34);
+  setText('hp-text', `${hp} / ${max}`);
+}
+
 let overlayKey = '';
 
 function renderOverlay(view: ChromeView): void {
@@ -156,7 +183,7 @@ function renderOverlay(view: ChromeView): void {
 
   if (view.run.mode === 'result') {
     overlay.hidden = false;
-    overlay.append(resultCard(view));
+    mountResult(overlay, resultSummary(view));
     return;
   }
 
@@ -200,7 +227,8 @@ function overlaySignature(view: ChromeView): string {
     return `title:${view.starting}:${view.progress.runsPlayed}:${view.progress.bestFloor}:${view.progress.bestRelics}:${chain}:${vault}`;
   }
   if (view.run.mode === 'result') {
-    return `result:${view.run.resultKind}:${view.run.floorNumber}:${view.run.relicsThisRun}:${view.run.scoreThisRun}:${view.run.player.hp}:${view.run.newBest}:${view.chainStatus}:${view.chainRank ?? ''}:${view.chainTx}:${view.practice}:${view.chainHeroId ?? ''}:${view.canRetry}:${view.progress.bestFloor}:${view.progress.bestRelics}`;
+    // The ceremony owns its DOM and is updated in place, so it keeps one signature per run.
+    return `result:${view.runId}`;
   }
   if (view.run.mode === 'combat') {
     const enemy = view.run.activeEnemyIndex !== null ? view.run.enemies[view.run.activeEnemyIndex] : undefined;
@@ -485,41 +513,40 @@ function choiceCard(run: RunState): HTMLElement {
   return card;
 }
 
-function resultCard(view: ChromeView): HTMLElement {
+function resultSummary(view: ChromeView): ResultSummary {
   const run = view.run as RunState;
   const won = run.resultKind === 'extracted';
-  const card = el('div', won ? 'panel result result-win' : 'panel result result-loss');
-  card.append(el('h2', 'panel-title', won ? 'Extracted' : 'Lost in the dark'));
-  card.append(el('p', 'panel-body', `Floor reached ${run.floorNumber} / ${MAX_FLOOR}`));
-  card.append(el('p', 'panel-body', `Relics kept ${run.relicsThisRun}  ·  Score ${won ? run.scoreThisRun : 0}`));
-  if (won) card.append(el('p', 'panel-body', `HP remaining ${run.player.hp}`));
-  if (run.newBest) card.append(el('p', 'new-best', 'New best'));
-  card.append(
-    el('p', 'stats', `Best floor ${view.progress.bestFloor} / ${MAX_FLOOR}  ·  Best relics ${view.progress.bestRelics}`)
-  );
-  if (view.practice) {
-    card.append(el('p', 'chain', view.chainStatus || 'Practice run. This one is not recorded on Stellar, so it cannot earn a delver.'));
-  } else if (view.chainStatus) {
-    const status = el('p', 'chain', view.chainStatus);
-    status.setAttribute('role', 'status');
-    card.append(status);
-    if (view.chainRank !== null) card.append(el('p', 'chain', `Leaderboard rank #${view.chainRank}`));
-    if (view.chainHeroId !== null) {
-      const earned = el('p', 'new-best', `${run.look.name} is yours. Find them in your vault.`);
-      earned.setAttribute('role', 'status');
-      card.append(earned);
-    }
-    if (TX_HASH.test(view.chainTx)) {
-      const link = el('a', 'quiet-link', 'View the transaction');
-      link.href = `${STELLAR_CONFIG.explorerUrl}/tx/${view.chainTx}`;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      card.append(link);
-    }
-  }
-  if (view.canRetry) card.append(button('Try again', 'retryVerify', 'btn'));
-  card.append(button('Title screen', 'confirm', 'btn btn-primary'));
-  return card;
+  const heroId = HERO_ORDER[run.loadout.base] ?? 'lantern';
+  return {
+    won,
+    floorReached: run.floorNumber,
+    maxFloor: MAX_FLOOR,
+    relics: run.relicsThisRun,
+    score: won ? run.scoreThisRun : 0,
+    hpLeft: run.player.hp,
+    newBest: run.newBest,
+    bestLine: `Best floor ${view.progress.bestFloor} / ${MAX_FLOOR}  ·  Best relics ${view.progress.bestRelics}`,
+    delver: {
+      name: run.look.name,
+      art: HEROES[heroId].art,
+      filter: cloakFilter(run.look.cloak, run.loadout.base),
+      emblem: run.look.emblem,
+    },
+  };
+}
+
+function verificationOf(view: ChromeView): Verification {
+  const url = TX_HASH.test(view.chainTx) ? `${STELLAR_CONFIG.explorerUrl}/tx/${view.chainTx}` : null;
+  return {
+    state: view.practice ? 'practice' : view.verifyState,
+    message: view.practice
+      ? view.chainStatus || 'Practice run. This one is not recorded on Stellar, so it cannot earn a delver.'
+      : view.chainStatus,
+    rank: view.chainRank,
+    txUrl: url,
+    heroEarned: view.chainHeroId !== null,
+    canRetry: view.canRetry,
+  };
 }
 
 export function syncChrome(view: ChromeView): void {
@@ -538,9 +565,9 @@ export function syncChrome(view: ChromeView): void {
     const floorName = ['', 'Reliquary', 'Drowned chapel', 'Obsidian crypt'][view.run.floorNumber] ?? '';
     setText('floor-label', `Floor ${view.run.floorNumber} / ${MAX_FLOOR}  ${floorName}`);
     setText('hud-name', view.run.look.name);
-    setText('hud-hp', `HP ${view.run.player.hp}/${view.run.player.maxHp}`);
-    setText('hud-relics', `Relics ${view.run.relicsThisRun}`);
-    setText('hud-score', `Score ${view.run.scoreThisRun}`);
+    paintHp(view.run.player.hp, view.run.player.maxHp);
+    setBumpText('hud-relics', `Relics ${view.run.relicsThisRun}`);
+    setBumpText('hud-score', `Score ${view.run.scoreThisRun}`);
     setText('hud-mode', view.practice ? 'Practice, not recorded' : '');
     const lastLine = view.run.log[view.run.log.length - 1] ?? '';
     setText('hud-log', lastLine);
@@ -556,5 +583,8 @@ export function syncChrome(view: ChromeView): void {
     setText('floor-label', view.run.resultKind === 'extracted' ? 'Out' : 'Ended');
   }
 
+  if (view.run?.mode === 'result' && !view.showStats && !view.showLeaderboard && !view.showVault) {
+    updateVerification(verificationOf(view));
+  }
   renderOverlay(view);
 }

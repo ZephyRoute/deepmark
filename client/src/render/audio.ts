@@ -330,3 +330,35 @@ export function stopAmbience(): void {
   bed?.stop();
   bed = null;
 }
+
+// ---- ceremony and feedback sounds ----
+
+/** A soft double thump, used while health is low. */
+export function sfxHeartbeat(): void {
+  thump({ from: 70, to: 40, duration: 0.14, gain: 0.22 });
+  thump({ from: 62, to: 38, duration: 0.16, gain: 0.16, delay: 0.19 });
+}
+
+/** The wax seal pressed onto a verified run. */
+export function sfxSeal(): void {
+  thump({ from: 150, to: 50, duration: 0.22, gain: 0.3, type: 'triangle' });
+  burst({ duration: 0.12, type: 'lowpass', from: 2400, to: 400, gain: 0.1 });
+  bell(659.3, 0.06, 0.05, 1.4);
+  bell(988, 0.05, 0.14, 1.6);
+}
+
+/** A delver becomes the player's own. Warmer and longer than any other cue. */
+export function sfxHeroEarned(): void {
+  bell(392, 0.1, 0, 2.6);
+  bell(523.3, 0.09, 0.18, 2.6);
+  bell(659.3, 0.09, 0.36, 2.8);
+  bell(784, 0.09, 0.54, 3);
+  bell(1046.5, 0.08, 0.78, 3.4);
+  burst({ duration: 1.2, type: 'highpass', from: 3000, to: 8000, gain: 0.03, delay: 0.6 });
+}
+
+/** A low sweep as a floor title appears. */
+export function sfxBanner(): void {
+  burst({ duration: 0.9, type: 'bandpass', from: 220, to: 1100, q: 0.6, gain: 0.07 });
+  thump({ from: 80, to: 55, duration: 0.5, gain: 0.1, type: 'triangle' });
+}

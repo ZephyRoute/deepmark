@@ -749,3 +749,143 @@ body:has(#overlay:not([hidden])) .touch {
   .descent-tip { transition: none; }
   .descent.is-diving .descent-art { animation: none; }
 }
+
+/* ---- Premium pass: motion and polish ---- */
+
+/* Screens arrive instead of snapping in. */
+.overlay > .panel,
+.overlay > .title-screen,
+.overlay > .prompt {
+  animation: panel-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.btn {
+  transition: transform 140ms ease, background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.btn:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(126, 240, 224, 0.5); }
+.btn:active:not(:disabled) { transform: translateY(1px) scale(0.99); }
+.btn-primary:hover:not(:disabled) { box-shadow: 0 0 22px rgba(126, 240, 224, 0.22); }
+.btn:disabled { opacity: 0.6; cursor: progress; }
+
+.pick, .chip { transition: transform 140ms ease, border-color 200ms ease, background-color 200ms ease; }
+.pick:hover, .chip:hover { transform: translateY(-1px); border-color: rgba(126, 240, 224, 0.45); }
+
+/* HUD: a health bar with a trailing ghost that shows what was just lost. */
+.hud-hp { display: inline-flex; align-items: center; gap: 8px; }
+.hp-track { position: relative; width: 104px; height: 9px; border-radius: 99px; background: rgba(28, 34, 48, 0.9); overflow: hidden; border: 1px solid rgba(232, 224, 208, 0.14); }
+.hp-ghost, .hp-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; }
+.hp-fill { background: linear-gradient(90deg, #4fd88f, #7dffb3); transition: width 160ms ease-out; }
+.hp-ghost { background: rgba(255, 170, 120, 0.85); transition: width 700ms ease-out 260ms; }
+.hud-hp.is-low .hp-fill { background: linear-gradient(90deg, #e0483c, #ff6b5a); animation: hp-throb 0.9s ease-in-out infinite; }
+.hp-text { font-variant-numeric: tabular-nums; }
+@keyframes hp-throb { 50% { filter: brightness(1.35); } }
+
+.bump { animation: bump 420ms cubic-bezier(0.2, 1.6, 0.4, 1); }
+@keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.22); color: var(--gold); } 100% { transform: scale(1); } }
+
+/* Floor and boss titles. */
+.banner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 34%;
+  z-index: 4;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  pointer-events: none;
+  text-align: center;
+  animation: banner-life 2.8s ease both;
+}
+
+.banner-line { width: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); animation: banner-line 2.8s ease both; }
+.banner-title { margin: 0; font-family: Palatino, "Iowan Old Style", Georgia, serif; font-size: clamp(1.6rem, 5vw, 2.6rem); letter-spacing: 0.22em; text-transform: uppercase; text-shadow: 0 2px 24px rgba(0, 0, 0, 0.9); animation: banner-title 2.8s ease both; }
+.banner-sub { margin: 0; color: var(--muted); font-size: 0.95rem; letter-spacing: 0.12em; text-shadow: 0 2px 16px rgba(0, 0, 0, 0.9); }
+.banner-boss .banner-title { color: #d8c8ff; letter-spacing: 0.3em; }
+.banner-boss .banner-line { background: linear-gradient(90deg, transparent, #9b7cf0, transparent); }
+
+@keyframes banner-life { 0% { opacity: 0; } 12% { opacity: 1; } 78% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes banner-line { 0% { width: 0; } 25% { width: min(70%, 420px); } 100% { width: min(70%, 420px); } }
+@keyframes banner-title { 0% { letter-spacing: 0.5em; opacity: 0; } 30% { letter-spacing: 0.22em; opacity: 1; } 100% { letter-spacing: 0.26em; opacity: 1; } }
+
+/* The result ceremony. */
+.result { display: flex; flex-direction: column; gap: 10px; width: min(100%, 520px); }
+.result-eyebrow { margin: 0; color: var(--muted); font-size: 0.74rem; letter-spacing: 0.22em; text-transform: uppercase; animation: rise 600ms ease both; }
+.result-title { margin: 0; font-family: Palatino, "Iowan Old Style", Georgia, serif; font-size: clamp(2rem, 7vw, 3rem); font-weight: 500; letter-spacing: 0.04em; animation: title-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.result-win .result-title { color: #f7e9c0; text-shadow: 0 0 36px rgba(231, 195, 106, 0.35); }
+.result-loss .result-title { color: #e9b9b3; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes title-in { from { opacity: 0; letter-spacing: 0.3em; filter: blur(6px); } to { opacity: 1; letter-spacing: 0.04em; filter: none; } }
+
+.result-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.result-stat { display: grid; gap: 2px; padding: 10px 6px; text-align: center; border-radius: 12px; border: 1px solid var(--line); background: rgba(8, 10, 16, 0.5); animation: rise 520ms ease both; }
+.result-stat-value { font-family: Palatino, "Iowan Old Style", Georgia, serif; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.result-stat-label { color: var(--muted); font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; }
+
+/* The replay ribbon: the contract reads the descent floor by floor. */
+.ribbon { position: relative; margin-top: 6px; padding: 14px 4px 6px; }
+.ribbon-track { position: absolute; left: 22px; right: 22px; top: 25px; height: 2px; background: rgba(232, 224, 208, 0.12); overflow: hidden; border-radius: 2px; }
+.ribbon-sweep { position: absolute; top: 0; bottom: 0; width: 34%; background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: 0; }
+.ribbon.is-pending .ribbon-sweep { opacity: 1; animation: sweep 1.7s ease-in-out infinite; }
+@keyframes sweep { from { left: -34%; } to { left: 100%; } }
+
+.ribbon-pips { position: relative; display: flex; justify-content: space-between; margin: 0; padding: 0; list-style: none; }
+.ribbon-pip { display: grid; justify-items: center; gap: 6px; opacity: 0; animation: rise 500ms ease both; }
+.ribbon-pip-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(232, 224, 208, 0.25); background: #0a0d14; transition: border-color 300ms ease, box-shadow 300ms ease, background 300ms ease; }
+.ribbon-pip.is-reached .ribbon-pip-dot { border-color: var(--gold); background: radial-gradient(circle, rgba(231, 195, 106, 0.55), rgba(231, 195, 106, 0.1)); box-shadow: 0 0 14px rgba(231, 195, 106, 0.4); }
+.ribbon-pip-label { color: var(--muted); font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; }
+.ribbon.is-failed { opacity: 0.55; }
+
+.ribbon-story { margin: 2px 0 0; text-align: center; color: var(--cyan); font-size: 0.9rem; letter-spacing: 0.06em; min-height: 1.4em; }
+.ribbon.is-practice ~ .ribbon-story { color: var(--muted); }
+
+.seal-wrap { display: grid; place-items: center; height: 68px; }
+.seal { width: 64px; height: 64px; opacity: 0; transform: scale(1.8) rotate(-14deg); pointer-events: none; }
+.seal-icon { width: 100%; height: 100%; fill: none; stroke: var(--gold); stroke-width: 2; filter: drop-shadow(0 0 10px rgba(231, 195, 106, 0.45)); }
+.seal-icon circle:first-child { stroke-width: 3; }
+.seal-check { stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; }
+.ribbon.is-sealed ~ .seal-wrap .seal { animation: stamp 620ms cubic-bezier(0.2, 1.3, 0.3, 1) forwards; }
+.ribbon.is-sealed ~ .seal-wrap .seal-check { animation: draw 420ms ease 360ms forwards; }
+.ribbon.is-sealed .ribbon-sweep { opacity: 0; animation: none; }
+@keyframes stamp { 0% { opacity: 0; transform: scale(1.9) rotate(-18deg); } 55% { opacity: 1; transform: scale(0.92) rotate(-6deg); } 100% { opacity: 1; transform: scale(1) rotate(-6deg); } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+
+.result-meta { display: flex; justify-content: center; align-items: center; gap: 14px; min-height: 1.6em; }
+.chip-rank { padding: 3px 12px; border-radius: 99px; border: 1px solid rgba(231, 195, 106, 0.5); color: var(--gold); font-size: 0.8rem; letter-spacing: 0.1em; animation: rise 500ms ease both; }
+
+/* A delver that became the player's own. */
+.result-hero { display: flex; align-items: center; gap: 16px; padding: 14px; border-radius: 16px; border: 1px solid rgba(231, 195, 106, 0.4); background: radial-gradient(120% 140% at 0% 0%, rgba(231, 195, 106, 0.14), rgba(8, 10, 16, 0.6)); }
+.result-hero.is-revealed { animation: hero-reveal 900ms cubic-bezier(0.2, 0.9, 0.2, 1) both; }
+@keyframes hero-reveal { 0% { opacity: 0; transform: translateY(14px) scale(0.96); filter: brightness(2.2); } 100% { opacity: 1; transform: none; filter: none; } }
+.hero-medallion { position: relative; width: 84px; height: 84px; flex: 0 0 auto; border-radius: 50%; border: 2px solid var(--gold); overflow: hidden; background: radial-gradient(circle at 50% 35%, #1a2430, #080a10); box-shadow: 0 0 0 5px rgba(5, 6, 11, 0.6), 0 0 34px rgba(231, 195, 106, 0.4); }
+.hero-medallion-portrait { position: absolute; left: 50%; top: 8px; width: 74px; height: 90px; transform: translateX(-50%); object-fit: cover; object-position: center top; }
+.hero-medallion-crest { position: absolute; right: 4px; bottom: 4px; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; color: var(--gold); background: rgba(5, 6, 11, 0.9); }
+.hero-medallion-crest .emblem { width: 16px; height: 16px; }
+.hero-copy-block { display: grid; gap: 4px; justify-items: start; }
+.hero-kicker { margin: 0; color: var(--gold); font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; }
+.hero-earned-name { margin: 0 0 6px; font-family: Palatino, "Iowan Old Style", Georgia, serif; font-size: 1.7rem; }
+
+.result-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+
+@media (max-width: 520px) {
+  .result-stats { grid-template-columns: repeat(2, 1fr); }
+  .seal { width: 52px; height: 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay > .panel, .overlay > .title-screen, .overlay > .prompt, .banner, .banner-line, .banner-title,
+  .result-eyebrow, .result-title, .result-stat, .ribbon-pip, .chip-rank, .result-hero.is-revealed { animation: none; opacity: 1; }
+  .ribbon.is-pending .ribbon-sweep { animation: none; opacity: 0.6; left: 33%; }
+  .ribbon.is-sealed ~ .seal-wrap .seal { animation: none; opacity: 1; transform: rotate(-6deg); }
+  .ribbon.is-sealed ~ .seal-wrap .seal-check { animation: none; stroke-dashoffset: 0; }
+  .bump, .hud-hp.is-low .hp-fill { animation: none; }
+}
+
+.result [hidden] { display: none !important; }

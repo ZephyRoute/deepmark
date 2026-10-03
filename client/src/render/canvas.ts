@@ -3,7 +3,7 @@ import { cloakFilter } from './emblems';
 import type { HeroId } from '../game/heroes';
 import type { RelicKind } from '../game/floor';
 import type { RunState } from '../game/state';
-import { drawPopups, getShakeOffset } from './effects';
+import { drawLowHealth, drawParticles, drawPopups, getShakeOffset, isFlashing } from './effects';
 import { sampleActor, type Clip } from './motion';
 
 const COLOR_BG = '#07080e';
@@ -277,7 +277,11 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
     const sheet = enemySheet(enemy.kind);
     const image = pickFrame(sheet.idle, sheet.walkA, sheet.walkB, sheet.attack, pose.clip, pose.phase, true);
     const lunge = pose.clip === 'attack' ? Math.sin(pose.phase * Math.PI) * 10 : 0;
-    if (ready(image)) drawFooted(ctx, image, spot.cx + lunge, spot.cy, ACTOR_SIZE[enemy.kind], false);
+    if (ready(image)) {
+      ctx.filter = isFlashing(`enemy-${index}`) ? 'brightness(2.6) saturate(0.25)' : 'none';
+      drawFooted(ctx, image, spot.cx + lunge, spot.cy, ACTOR_SIZE[enemy.kind], false);
+      ctx.filter = 'none';
+    }
     drawBar(ctx, spot.cx, spot.cy - ACTOR_SIZE[enemy.kind] * 0.42, 36, enemy.hp / enemy.maxHp, 0.34);
   }
 
@@ -299,7 +303,9 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
     : 1;
   if (ready(playerImage)) {
     // The cloak colour recolours the delver. Browsers without canvas filters just draw the base art.
-    ctx.filter = cloakFilter(run.look.cloak, run.loadout.base);
+    const cloak = cloakFilter(run.look.cloak, run.loadout.base);
+    const flash = isFlashing('player') ? ' brightness(2.4) saturate(0.3)' : '';
+    ctx.filter = cloak === 'none' ? flash.trim() || 'none' : `${cloak}${flash}`;
     drawFooted(ctx, playerImage, player.cx + playerLunge, player.cy, ACTOR_SIZE.player, facing < 0, squat);
     ctx.filter = 'none';
   }
@@ -311,6 +317,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
   }
   drawBar(ctx, player.cx, player.cy - 40, 36, run.player.hp / run.player.maxHp, 0.3);
 
+  drawParticles(ctx, (x, y) => cell(x, y));
   drawPopups(ctx, (x, y) => cell(x, y));
 
   const vignette = ctx.createRadialGradient(w / 2, h / 2, h * 0.2, w / 2, h / 2, h * 0.72);
@@ -320,4 +327,5 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
   ctx.fillRect(offsetX, 0, GRID_WIDTH * TILE_SIZE, GRID_HEIGHT * TILE_SIZE);
 
   ctx.restore();
+  drawLowHealth(ctx, run.player.hp / run.player.maxHp);
 }
