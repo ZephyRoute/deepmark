@@ -9,7 +9,8 @@
 
 use crate::rng::Mulberry32;
 use crate::world::{
-    archetype, floor, hero, is_walkable, relic_value, EnemyKind, Floor, Hero, Point, RelicKind, MAX_FLOOR,
+    archetype, floor, hero, is_walkable, relic_value, EnemyKind, Floor, Hero, Point, RelicKind,
+    MAX_FLOOR,
 };
 
 pub const ACTION_UP: u8 = 0;
@@ -126,7 +127,10 @@ impl Sim {
         if self.mode != Mode::Explore {
             return;
         }
-        let target = Point { x: self.player.x + dx, y: self.player.y + dy };
+        let target = Point {
+            x: self.player.x + dx,
+            y: self.player.y + dy,
+        };
 
         if let Some(idx) = self.enemy_at(target) {
             self.mode = Mode::Combat;
@@ -164,7 +168,9 @@ impl Sim {
             return;
         }
         let Some(idx) = self.active else { return };
-        let Some(mut enemy) = self.enemies[idx] else { return };
+        let Some(mut enemy) = self.enemies[idx] else {
+            return;
+        };
         let arch = archetype(enemy.kind);
 
         let dealt = self.rng.rand_int(self.hero.dmg_min, self.hero.dmg_max) as i32;
@@ -241,7 +247,11 @@ fn spawn_enemies(floor: &Floor) -> [Option<EnemyState>; MAX_ENEMIES_PER_FLOOR] {
 
 /// Replay a whole run. The log must end exactly on the action that finishes
 /// it: no unfinished runs and no padding after the end.
-pub fn replay<I: Iterator<Item = u8>>(hero_id: u32, seed: u32, actions: I) -> Result<Outcome, SimError> {
+pub fn replay<I: Iterator<Item = u8>>(
+    hero_id: u32,
+    seed: u32,
+    actions: I,
+) -> Result<Outcome, SimError> {
     let hero = hero(hero_id).ok_or(SimError::UnknownHero)?;
     let mut sim = Sim::new(hero, seed);
     let mut count: u32 = 0;
@@ -354,7 +364,10 @@ mod tests {
         // if the player dies, otherwise the run is just incomplete
         match run(0, 3, &log) {
             Ok(out) => assert_eq!(out.ending, Ending::Dead),
-            Err(e) => assert!(matches!(e, SimError::Incomplete | SimError::TrailingActions)),
+            Err(e) => assert!(matches!(
+                e,
+                SimError::Incomplete | SimError::TrailingActions
+            )),
         }
     }
 
@@ -368,7 +381,9 @@ mod tests {
                 log.push(ACTION_DESCEND);
                 log.extend(repeat(ACTION_RIGHT, 4));
                 log.extend(repeat(ACTION_ATTACK, attacks));
-                let Ok(out) = run(1, seed, &log) else { continue };
+                let Ok(out) = run(1, seed, &log) else {
+                    continue;
+                };
                 if out.ending == Ending::Dead {
                     assert_eq!(out.score, 0);
                     assert_eq!(out.relics_common + out.relics_rare + out.relics_core, 0);

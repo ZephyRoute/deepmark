@@ -23,18 +23,19 @@ pub mod components;
 pub mod rng;
 pub mod sim;
 pub mod systems;
-pub mod world;
 #[cfg(test)]
 mod test;
+pub mod world;
 
 use components::{
-    DataKey, PlayerRecord, PlayerSummary, RelicTokens, RunOutcome, RunTicket, TopEntry, ACTIONS_PER_LEDGER,
-    MAX_ACTIONS, MAX_PAGE, RUN_TTL, START_COOLDOWN_LEDGERS, TOP_SIZE, TTL_EXTEND_TO, TTL_THRESHOLD,
+    DataKey, PlayerRecord, PlayerSummary, RelicTokens, RunOutcome, RunTicket, TopEntry,
+    ACTIONS_PER_LEDGER, MAX_ACTIONS, MAX_PAGE, RELIC_UNIT, RUN_TTL, START_COOLDOWN_LEDGERS,
+    TOP_SIZE, TTL_EXTEND_TO, TTL_THRESHOLD,
 };
 use sim::{Ending, Outcome, SimError};
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, token::StellarAssetClient, xdr::ToXdr, Address, Bytes,
-    Env, Vec,
+    contract, contracterror, contractevent, contractimpl, token::StellarAssetClient, xdr::ToXdr,
+    Address, Bytes, Env, Vec,
 };
 use systems::{apply_outcome, rank_key};
 
@@ -97,8 +98,17 @@ pub struct DeepmarkContract;
 impl DeepmarkContract {
     /// Sets the three relic Stellar Asset Contracts once. There is no admin
     /// and no upgrade path: what is deployed is what runs.
-    pub fn __constructor(env: Env, relic_common: Address, relic_rare: Address, relic_core: Address) {
-        let tokens = RelicTokens { common: relic_common, rare: relic_rare, core: relic_core };
+    pub fn __constructor(
+        env: Env,
+        relic_common: Address,
+        relic_rare: Address,
+        relic_core: Address,
+    ) {
+        let tokens = RelicTokens {
+            common: relic_common,
+            rare: relic_rare,
+            core: relic_core,
+        };
         env.storage().instance().set(&DataKey::Relics, &tokens);
     }
 
@@ -116,7 +126,12 @@ impl DeepmarkContract {
         let is_new_player = existing.is_none();
         let mut record = existing.unwrap_or_else(PlayerRecord::empty);
 
-        if record.last_start_ledger > 0 && now < record.last_start_ledger.saturating_add(START_COOLDOWN_LEDGERS) {
+        if record.last_start_ledger > 0
+            && now
+                < record
+                    .last_start_ledger
+                    .saturating_add(START_COOLDOWN_LEDGERS)
+        {
             return Err(Error::StartCooldown);
         }
 
@@ -127,9 +142,15 @@ impl DeepmarkContract {
         }
 
         let seed = derive_seed(&env, &player, record.total_runs);
-        let ticket = RunTicket { seed, hero, start_ledger: now };
+        let ticket = RunTicket {
+            seed,
+            hero,
+            start_ledger: now,
+        };
         env.storage().temporary().set(&run_key, &ticket);
-        env.storage().temporary().extend_ttl(&run_key, RUN_TTL, RUN_TTL);
+        env.storage()
+            .temporary()
+            .extend_ttl(&run_key, RUN_TTL, RUN_TTL);
 
         record.last_start_ledger = now;
         save_record(&env, &record_key, &record);
@@ -151,9 +172,15 @@ impl DeepmarkContract {
         }
 
         let run_key = DataKey::Run(player.clone());
-        let ticket: RunTicket = env.storage().temporary().get(&run_key).ok_or(Error::RunNotStarted)?;
+        let ticket: RunTicket = env
+            .storage()
+            .temporary()
+            .get(&run_key)
+            .ok_or(Error::RunNotStarted)?;
 
-        let earliest = ticket.start_ledger.saturating_add(actions.len().div_ceil(ACTIONS_PER_LEDGER));
+        let earliest = ticket
+            .start_ledger
+            .saturating_add(actions.len().div_ceil(ACTIONS_PER_LEDGER));
         if env.ledger().sequence() < earliest {
             return Err(Error::TooFast);
         }
@@ -193,7 +220,12 @@ impl DeepmarkContract {
 
     /// Replay any run without touching state. Anyone can audit a result with
     /// the hero, the seed from the `run_started` event, and the action log.
-    pub fn verify_run(_env: Env, hero: u32, seed: u32, actions: Bytes) -> Result<RunOutcome, Error> {
+    pub fn verify_run(
+        _env: Env,
+        hero: u32,
+        seed: u32,
+        actions: Bytes,
+    ) -> Result<RunOutcome, Error> {
         if actions.len() > MAX_ACTIONS {
             return Err(Error::TooManyActions);
         }
@@ -213,26 +245,39 @@ impl DeepmarkContract {
 
     /// The leaderboard, best first, at most `TOP_SIZE` entries, in one call.
     pub fn top(env: Env) -> Vec<TopEntry> {
-        env.storage().persistent().get(&DataKey::Top).unwrap_or_else(|| Vec::new(&env))
+        env.storage()
+            .persistent()
+            .get(&DataKey::Top)
+            .unwrap_or_else(|| Vec::new(&env))
     }
 
     /// How many distinct players have ever started a run. Not capped.
     pub fn player_count(env: Env) -> u32 {
-        env.storage().persistent().get(&DataKey::PlayerCount).unwrap_or(0)
+        env.storage()
+            .persistent()
+            .get(&DataKey::PlayerCount)
+            .unwrap_or(0)
     }
 
     /// Players in the order they first appeared, with profiles, at most
     /// `MAX_PAGE` per call. Lets a client page through every player without
     /// one request per address.
     pub fn players(env: Env, start: u32, limit: u32) -> Vec<PlayerSummary> {
-        let count: u32 = env.storage().persistent().get(&DataKey::PlayerCount).unwrap_or(0);
+        let count: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PlayerCount)
+            .unwrap_or(0);
         let end = start.saturating_add(limit.min(MAX_PAGE)).min(count);
         let mut out = Vec::new(&env);
         let mut i = start;
         while i < end {
             let address: Option<Address> = env.storage().persistent().get(&DataKey::PlayerAt(i));
             if let Some(player) = address {
-                let record: Option<PlayerRecord> = env.storage().persistent().get(&DataKey::Record(player.clone()));
+                let record: Option<PlayerRecord> = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::Record(player.clone()));
                 if let Some(record) = record {
                     out.push_back(PlayerSummary { player, record });
                 }
@@ -250,8 +295,14 @@ impl DeepmarkContract {
 
 fn derive_seed(env: &Env, player: &Address, runs: u32) -> u32 {
     let mut material = Bytes::new(env);
-    material.append(&Bytes::from_array(env, &env.ledger().sequence().to_be_bytes()));
-    material.append(&Bytes::from_array(env, &env.ledger().timestamp().to_be_bytes()));
+    material.append(&Bytes::from_array(
+        env,
+        &env.ledger().sequence().to_be_bytes(),
+    ));
+    material.append(&Bytes::from_array(
+        env,
+        &env.ledger().timestamp().to_be_bytes(),
+    ));
     material.append(&Bytes::from_array(env, &runs.to_be_bytes()));
     material.append(&player.clone().to_xdr(env));
     let hash = env.crypto().sha256(&material).to_array();
@@ -260,15 +311,25 @@ fn derive_seed(env: &Env, player: &Address, runs: u32) -> u32 {
 
 fn save_record(env: &Env, key: &DataKey, record: &PlayerRecord) {
     env.storage().persistent().set(key, record);
-    env.storage().persistent().extend_ttl(key, TTL_THRESHOLD, TTL_EXTEND_TO);
+    env.storage()
+        .persistent()
+        .extend_ttl(key, TTL_THRESHOLD, TTL_EXTEND_TO);
 }
 
 fn register_player(env: &Env, player: &Address) {
-    let count: u32 = env.storage().persistent().get(&DataKey::PlayerCount).unwrap_or(0);
+    let count: u32 = env
+        .storage()
+        .persistent()
+        .get(&DataKey::PlayerCount)
+        .unwrap_or(0);
     let slot = DataKey::PlayerAt(count);
     env.storage().persistent().set(&slot, player);
-    env.storage().persistent().extend_ttl(&slot, TTL_THRESHOLD, TTL_EXTEND_TO);
-    env.storage().persistent().set(&DataKey::PlayerCount, &count.saturating_add(1));
+    env.storage()
+        .persistent()
+        .extend_ttl(&slot, TTL_THRESHOLD, TTL_EXTEND_TO);
+    env.storage()
+        .persistent()
+        .set(&DataKey::PlayerCount, &count.saturating_add(1));
     env.storage()
         .persistent()
         .extend_ttl(&DataKey::PlayerCount, TTL_THRESHOLD, TTL_EXTEND_TO);
@@ -278,13 +339,21 @@ fn register_player(env: &Env, player: &Address) {
 /// run improved the player's best, so the old entry (if any) is replaced.
 fn update_top(env: &Env, player: &Address, outcome: &Outcome, key: u64) {
     let board_key = DataKey::Top;
-    let old: Vec<TopEntry> = env.storage().persistent().get(&board_key).unwrap_or_else(|| Vec::new(env));
+    let old: Vec<TopEntry> = env
+        .storage()
+        .persistent()
+        .get(&board_key)
+        .unwrap_or_else(|| Vec::new(env));
 
     let entry = TopEntry {
         player: player.clone(),
         rank_key: key,
         floor: outcome.floor_reached,
-        score: if outcome.ending == Ending::Extracted { outcome.score } else { 0 },
+        score: if outcome.ending == Ending::Extracted {
+            outcome.score
+        } else {
+            0
+        },
         hp_left: outcome.hp_left,
         actions: outcome.actions,
     };
@@ -309,7 +378,9 @@ fn update_top(env: &Env, player: &Address, outcome: &Outcome, key: u64) {
     }
 
     env.storage().persistent().set(&board_key, &next);
-    env.storage().persistent().extend_ttl(&board_key, TTL_THRESHOLD, TTL_EXTEND_TO);
+    env.storage()
+        .persistent()
+        .extend_ttl(&board_key, TTL_THRESHOLD, TTL_EXTEND_TO);
 }
 
 /// Mint the relics a verified extraction banked. Uses `try_mint` so a player
@@ -326,7 +397,8 @@ fn mint_relics(env: &Env, player: &Address, outcome: &Outcome) -> bool {
         if amount == 0 {
             continue;
         }
-        let result = StellarAssetClient::new(env, token).try_mint(player, &(amount as i128));
+        let result =
+            StellarAssetClient::new(env, token).try_mint(player, &(amount as i128 * RELIC_UNIT));
         if !matches!(result, Ok(Ok(()))) {
             all_minted = false;
         }

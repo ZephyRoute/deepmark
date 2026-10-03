@@ -351,7 +351,7 @@ body:has(#overlay:not([hidden])) .touch {
 
 .board-head, .board-row {
   display: grid;
-  grid-template-columns: 28px 1fr 52px 52px 40px;
+  grid-template-columns: 28px 1fr 48px 48px 36px 52px;
   gap: 8px;
   align-items: center;
   font-size: 0.86rem;

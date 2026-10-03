@@ -11,24 +11,34 @@ import {
   type TractionSummary,
 } from '../stats/summary';
 import { STELLAR_CONFIG } from './config';
-import { readClient } from './contract';
+import { fetchPlayerCount, fetchPlayers, type PlayerRecord } from './contract';
 
 const EVENT_PAGE = 100;
 const EVENT_PAGES = 40;
 
-interface RawRecord {
-  best_floor?: unknown;
-  best_relics?: unknown;
-  total_runs?: unknown;
-}
+const PLAYER_PAGE = 50;
 
-function playerMark(address: string, raw: RawRecord | null | undefined): PlayerMark | null {
-  if (!raw) return null;
+function playerMark(address: unknown, raw: PlayerRecord | null | undefined): PlayerMark | null {
+  if (!isAddress(address) || !raw) return null;
   const bestFloor = count(raw.best_floor, 3);
-  const bestRelics = count(raw.best_relics);
-  const totalRuns = count(raw.total_runs);
-  if (bestFloor === null || bestRelics === null || totalRuns === null || totalRuns < 1) return null;
-  return { address, bestFloor, bestRelics, totalRuns };
+  const bestScore = count(raw.best_score, 6);
+  const extractions = count(raw.extractions);
+  const deaths = count(raw.deaths);
+  const forfeits = count(raw.forfeits);
+  const relicsBanked = count(raw.relics_banked);
+  if (
+    bestFloor === null ||
+    bestScore === null ||
+    extractions === null ||
+    deaths === null ||
+    forfeits === null ||
+    relicsBanked === null
+  ) {
+    return null;
+  }
+  const finishedRuns = extractions + deaths;
+  if (finishedRuns < 1) return null;
+  return { address, bestFloor, bestScore, extractions, deaths, forfeits, relicsBanked, finishedRuns };
 }
 
 function isoTime(value: unknown): string | null {
@@ -47,20 +57,23 @@ function isoTime(value: unknown): string | null {
 function parseRun(event: rpc.Api.EventResponse): RecordedRun | null {
   if (!event.inSuccessfulContractCall) return null;
   const name = event.topic[0] ? scValToNative(event.topic[0]) : null;
-  if (name !== 'run_recorded') return null;
+  if (name !== 'run_finished') return null;
   const address = event.topic[1] ? scValToNative(event.topic[1]) : null;
   if (!isAddress(address)) return null;
-  const value = scValToNative(event.value) as { floor_reached?: unknown; relics_kept?: unknown } | null;
+  const value = scValToNative(event.value) as
+    | { floor_reached?: unknown; score?: unknown; extracted?: unknown }
+    | null;
   if (!value || typeof value !== 'object') return null;
   const floorReached = count(value.floor_reached, 3);
-  const relicsKept = count(value.relics_kept);
+  const score = count(value.score, 6);
   const at = isoTime(event.ledgerClosedAt);
-  if (floorReached === null || relicsKept === null || !at || !isTxHash(event.txHash)) return null;
-  return { at, address, floorReached, relicsKept, txHash: event.txHash };
+  if (floorReached === null || score === null || typeof value.extracted !== 'boolean') return null;
+  if (!at || !isTxHash(event.txHash)) return null;
+  return { at, address, floorReached, score, extracted: value.extracted, txHash: event.txHash };
 }
 
-function runRecordedTopic(): string {
-  return nativeToScVal('run_recorded', { type: 'symbol' }).toXDR('base64');
+function runFinishedTopic(): string {
+  return nativeToScVal('run_finished', { type: 'symbol' }).toXDR('base64');
 }
 
 async function loadRuns(server: rpc.Server): Promise<{
@@ -73,7 +86,7 @@ async function loadRuns(server: rpc.Server): Promise<{
     {
       type: 'contract',
       contractIds: [STELLAR_CONFIG.contractId],
-      topics: [[runRecordedTopic(), '*']],
+      topics: [[runFinishedTopic(), '*']],
     },
   ];
   const probe = await server.getEvents({ startLedger: latest.sequence, filters, limit: 1 });
@@ -115,33 +128,24 @@ async function loadRuns(server: rpc.Server): Promise<{
   return { runs, window, truncated };
 }
 
-async function mapLimited<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  async function worker(): Promise<void> {
-    while (next < items.length) {
-      const index = next;
-      next += 1;
-      const item = items[index];
-      if (item === undefined) return;
-      results[index] = await fn(item);
+/** Reads every player through paged calls, 50 profiles per request. */
+async function loadPlayers(): Promise<{ marks: PlayerMark[]; opened: number; capped: boolean }> {
+  const opened = await fetchPlayerCount();
+  const target = Math.min(opened, PLAYER_CAP);
+  const marks: PlayerMark[] = [];
+  for (let start = 0; start < target; start += PLAYER_PAGE) {
+    const page = await fetchPlayers(start, PLAYER_PAGE);
+    for (const entry of page) {
+      const mark = playerMark(entry.player, entry.record);
+      if (mark) marks.push(mark);
     }
   }
-  const workers = Math.min(limit, items.length);
-  await Promise.all(Array.from({ length: workers }, () => worker()));
-  return results;
+  return { marks, opened, capped: opened > PLAYER_CAP };
 }
 
 export async function loadTraction(): Promise<TractionSummary> {
   const server = new rpc.Server(STELLAR_CONFIG.rpcUrl);
-  const client = await readClient();
-  const board = await client.leaderboard();
-  const addresses = (board.result ?? []).filter(isAddress).slice(0, PLAYER_CAP);
-  const marks = await mapLimited(addresses, 8, async (address) => {
-    const record = await client.get_record({ player: address });
-    return playerMark(address, record.result as RawRecord | null | undefined);
-  });
-  const players = marks.filter((mark): mark is PlayerMark => mark !== null);
+  const players = await loadPlayers();
   const events = await loadRuns(server);
-  return summarize(players, events.runs, events.window, events.truncated, addresses.length >= PLAYER_CAP);
+  return summarize(players.marks, events.runs, events.window, events.truncated, players.opened, players.capped);
 }

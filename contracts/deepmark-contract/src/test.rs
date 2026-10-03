@@ -4,8 +4,11 @@
 //! there without an `Env`. These tests cover storage, authorization, replay
 //! protection, ranking, paging and relic minting.
 
-use crate::components::{PlayerRecord, MAX_ACTIONS, TOP_SIZE};
-use crate::sim::{ACTION_ATTACK, ACTION_DESCEND, ACTION_DOWN, ACTION_EXTRACT, ACTION_LEFT, ACTION_RIGHT, ACTION_UP};
+use crate::components::{PlayerRecord, MAX_ACTIONS, RELIC_UNIT, TOP_SIZE};
+use crate::sim::{
+    ACTION_ATTACK, ACTION_DESCEND, ACTION_DOWN, ACTION_EXTRACT, ACTION_LEFT, ACTION_RIGHT,
+    ACTION_UP,
+};
 use crate::{DeepmarkContract, DeepmarkContractClient, Error};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -35,16 +38,29 @@ fn setup<'a>() -> Fixture<'a> {
     set_ledger(&env, 100);
 
     let issuer = Address::generate(&env);
-    let common = env.register_stellar_asset_contract_v2(issuer.clone()).address();
-    let rare = env.register_stellar_asset_contract_v2(issuer.clone()).address();
+    let common = env
+        .register_stellar_asset_contract_v2(issuer.clone())
+        .address();
+    let rare = env
+        .register_stellar_asset_contract_v2(issuer.clone())
+        .address();
     let core = env.register_stellar_asset_contract_v2(issuer).address();
 
-    let contract_id = env.register(DeepmarkContract, (common.clone(), rare.clone(), core.clone()));
+    let contract_id = env.register(
+        DeepmarkContract,
+        (common.clone(), rare.clone(), core.clone()),
+    );
     for token in [&common, &rare, &core] {
         StellarAssetClient::new(&env, token).set_admin(&contract_id);
     }
     let client = DeepmarkContractClient::new(&env, &contract_id);
-    Fixture { env, client, common, rare, core }
+    Fixture {
+        env,
+        client,
+        common,
+        rare,
+        core,
+    }
 }
 
 fn bytes(env: &Env, actions: &[u8]) -> Bytes {
@@ -106,7 +122,10 @@ fn start_run_issues_a_ticket_and_registers_the_player() {
 fn an_unknown_hero_is_rejected() {
     let f = setup();
     let player = Address::generate(&f.env);
-    assert_eq!(f.client.try_start_run(&player, &9), Err(Ok(Error::InvalidHero)));
+    assert_eq!(
+        f.client.try_start_run(&player, &9),
+        Err(Ok(Error::InvalidHero))
+    );
 }
 
 #[test]
@@ -165,7 +184,9 @@ fn the_same_log_cannot_be_claimed_twice() {
 fn finishing_without_starting_is_rejected() {
     let f = setup();
     let player = Address::generate(&f.env);
-    let result = f.client.try_finish_run(&player, &bytes(&f.env, &free_extraction()));
+    let result = f
+        .client
+        .try_finish_run(&player, &bytes(&f.env, &free_extraction()));
     assert_eq!(result, Err(Ok(Error::RunNotStarted)));
 }
 
@@ -180,7 +201,10 @@ fn a_run_cannot_be_submitted_faster_than_it_could_be_played() {
     assert_eq!(too_early, Err(Ok(Error::TooFast)));
 
     finish_ledger(&f, log.len());
-    assert!(f.client.try_finish_run(&player, &bytes(&f.env, &log)).is_ok());
+    assert!(f
+        .client
+        .try_finish_run(&player, &bytes(&f.env, &log))
+        .is_ok());
 }
 
 #[test]
@@ -200,10 +224,14 @@ fn unknown_actions_incomplete_logs_and_padding_are_rejected() {
     f.client.start_run(&player, &0);
     set_ledger(&f.env, 300);
 
-    let unknown = f.client.try_finish_run(&player, &bytes(&f.env, &[ACTION_UP, 42]));
+    let unknown = f
+        .client
+        .try_finish_run(&player, &bytes(&f.env, &[ACTION_UP, 42]));
     assert_eq!(unknown, Err(Ok(Error::InvalidAction)));
 
-    let incomplete = f.client.try_finish_run(&player, &bytes(&f.env, &repeat(ACTION_UP, 3)));
+    let incomplete = f
+        .client
+        .try_finish_run(&player, &bytes(&f.env, &repeat(ACTION_UP, 3)));
     assert_eq!(incomplete, Err(Ok(Error::RunIncomplete)));
 
     let mut padded = free_extraction();
@@ -239,7 +267,10 @@ fn starting_again_too_soon_is_rejected_and_later_it_forfeits_the_open_run() {
     f.client.start_run(&player, &0);
 
     set_ledger(&f.env, 103);
-    assert_eq!(f.client.try_start_run(&player, &0), Err(Ok(Error::StartCooldown)));
+    assert_eq!(
+        f.client.try_start_run(&player, &0),
+        Err(Ok(Error::StartCooldown))
+    );
 
     set_ledger(&f.env, 106);
     let second = f.client.start_run(&player, &1);
@@ -264,7 +295,10 @@ fn a_banked_relic_is_minted_as_a_stellar_asset() {
     assert!(outcome.extracted);
     assert_eq!(outcome.relics_common, 1);
     assert_eq!(outcome.score, 1);
-    assert_eq!(TokenClient::new(&f.env, &f.common).balance(&player), 1);
+    assert_eq!(
+        TokenClient::new(&f.env, &f.common).balance(&player),
+        RELIC_UNIT
+    );
     assert_eq!(TokenClient::new(&f.env, &f.rare).balance(&player), 0);
     assert_eq!(TokenClient::new(&f.env, &f.core).balance(&player), 0);
     assert_eq!(f.client.get_record(&player).unwrap().relics_banked, 1);
@@ -277,8 +311,15 @@ fn a_failed_mint_never_loses_the_verified_run() {
     let env = Env::default();
     env.mock_all_auths();
     set_ledger(&env, 100);
-    let bogus = [Address::generate(&env), Address::generate(&env), Address::generate(&env)];
-    let id = env.register(DeepmarkContract, (bogus[0].clone(), bogus[1].clone(), bogus[2].clone()));
+    let bogus = [
+        Address::generate(&env),
+        Address::generate(&env),
+        Address::generate(&env),
+    ];
+    let id = env.register(
+        DeepmarkContract,
+        (bogus[0].clone(), bogus[1].clone(), bogus[2].clone()),
+    );
     let client = DeepmarkContractClient::new(&env, &id);
     let player = Address::generate(&env);
 
@@ -410,7 +451,9 @@ fn verify_run_audits_any_run_without_touching_state() {
     assert_eq!(outcome.relics_common, 1);
     assert_eq!(f.client.player_count(), 0);
 
-    let bad = f.client.try_verify_run(&0, &12345, &bytes(&f.env, &repeat(ACTION_UP, 2)));
+    let bad = f
+        .client
+        .try_verify_run(&0, &12345, &bytes(&f.env, &repeat(ACTION_UP, 2)));
     assert_eq!(bad, Err(Ok(Error::RunIncomplete)));
 }
 
@@ -426,7 +469,10 @@ fn relic_tokens_reports_the_configured_assets() {
 #[test]
 fn unknown_players_have_no_record() {
     let f = setup();
-    assert_eq!(f.client.get_record(&Address::generate(&f.env)), None::<PlayerRecord>);
+    assert_eq!(
+        f.client.get_record(&Address::generate(&f.env)),
+        None::<PlayerRecord>
+    );
 }
 
 #[test]
@@ -439,7 +485,9 @@ fn nobody_can_act_for_an_address_that_did_not_sign() {
     let victim = Address::generate(&env);
 
     assert!(client.try_start_run(&victim, &0).is_err());
-    assert!(client.try_finish_run(&victim, &bytes(&env, &free_extraction())).is_err());
+    assert!(client
+        .try_finish_run(&victim, &bytes(&env, &free_extraction()))
+        .is_err());
 }
 
 #[test]
@@ -461,5 +509,8 @@ fn the_worst_case_log_stays_far_under_the_cpu_budget() {
     f.client.finish_run(&player, &bytes(&f.env, &log));
     let cpu = f.env.cost_estimate().budget().cpu_instruction_cost();
     std::println!("worst case finish_run cpu instructions: {cpu}");
-    assert!(cpu < 100_000_000, "finish_run used {cpu} instructions, limit is 400M");
+    assert!(
+        cpu < 100_000_000,
+        "finish_run used {cpu} instructions, limit is 400M"
+    );
 }

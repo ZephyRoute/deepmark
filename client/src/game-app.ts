@@ -18,7 +18,17 @@ import {
 } from './render/audio';
 import { loadHero, saveHero, type HeroId } from './game/heroes';
 import { getPlayerKeypair } from './stellar/account';
-import { fetchLeaderboard, fetchOnchainRecord, submitRunResult, type PlayerRecord } from './stellar/contract';
+import {
+  CONTRACT_ERROR,
+  fetchRecord,
+  fetchTop,
+  finishRun,
+  HERO_CODE,
+  isContractError,
+  startRun,
+  type PlayerRecord,
+} from './stellar/contract';
+import { fetchRelicBalances, type RelicBalances } from './stellar/relics';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const context = canvas.getContext('2d');
@@ -28,38 +38,83 @@ const ctx: CanvasRenderingContext2D = context;
 let run: RunState | null = null;
 let progress: Progress = loadProgress();
 let chainStatus = '';
+let chainTx = '';
+let chainRank: number | null = null;
 let onchainRecord: PlayerRecord | null = null;
+let relicBalances: RelicBalances | null = null;
 let playerAddress = '';
 
 let heroId: HeroId = loadHero();
 let showLeaderboard = false;
 let showStats = false;
+let starting = false;
+let practice = false;
 let leaderboardLoading = false;
 let leaderboardRows: LeaderboardRow[] | null = null;
 let chainRead: ChainRead = 'loading';
 
-getPlayerKeypair()
-  .then(async (keypair) => {
-    playerAddress = keypair.publicKey();
-    try {
-      onchainRecord = await fetchOnchainRecord(keypair);
-      chainRead = 'ready';
-    } catch (err) {
-      chainRead = 'unavailable';
-      console.warn('Deepmark: could not read the on-chain record yet', err);
-    }
-  })
-  .catch((err) => {
-    chainRead = 'unavailable';
-    console.warn('Deepmark: could not set up a testnet account', err);
+/** Waiting longer than this for the chain to open a run falls back to a practice run. */
+const START_TIMEOUT_MS = 50_000;
+const START_RETRIES = 3;
+const START_RETRY_MS = 6_000;
+const LEADERBOARD_ROWS = 10;
+
+// One chain transaction at a time. Two transactions from the same account
+// built before the first lands would reuse a sequence number and one of them
+// would fail, so starting a run waits for the previous run's verification.
+let chainQueue: Promise<unknown> = Promise.resolve();
+function enqueue<T>(job: () => Promise<T>): Promise<T> {
+  const next = chainQueue.then(job, job);
+  chainQueue = next.catch(() => undefined);
+  return next;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Timed out waiting for Stellar')), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
   });
+}
+
+async function refreshOnchain(): Promise<void> {
+  try {
+    const keypair = await getPlayerKeypair();
+    playerAddress = keypair.publicKey();
+    const [record, balances] = await Promise.all([fetchRecord(playerAddress), fetchRelicBalances(playerAddress)]);
+    onchainRecord = record;
+    relicBalances = balances;
+    chainRead = 'ready';
+  } catch (err) {
+    chainRead = 'unavailable';
+    console.warn('Deepmark: could not read the on-chain record yet', err);
+  }
+}
+
+void refreshOnchain();
 
 function onchainSnapshot(): OnchainSnapshot | null {
   if (!onchainRecord) return null;
   return {
     bestFloor: onchainRecord.best_floor,
-    bestRelics: onchainRecord.best_relics,
-    totalRuns: onchainRecord.total_runs,
+    bestScore: onchainRecord.best_score,
+    runs: onchainRecord.total_runs,
+    extractions: onchainRecord.extractions,
+    deaths: onchainRecord.deaths,
+    forfeits: onchainRecord.forfeits,
+    relicsBanked: onchainRecord.relics_banked,
   };
 }
 
@@ -68,13 +123,13 @@ async function openLeaderboard(): Promise<void> {
   if (leaderboardRows || leaderboardLoading) return;
   leaderboardLoading = true;
   try {
-    const keypair = await getPlayerKeypair();
-    const entries = await fetchLeaderboard(keypair, 10);
-    leaderboardRows = entries.map((entry) => ({
-      address: entry.address,
-      bestFloor: entry.record.best_floor,
-      bestRelics: entry.record.best_relics,
-      totalRuns: entry.record.total_runs,
+    const entries = await fetchTop();
+    leaderboardRows = entries.slice(0, LEADERBOARD_ROWS).map((entry) => ({
+      address: entry.player,
+      score: entry.score,
+      floor: entry.floor,
+      hpLeft: entry.hp_left,
+      actions: entry.actions,
     }));
   } catch (err) {
     console.warn('Deepmark: could not load the leaderboard', err);
@@ -84,24 +139,79 @@ async function openLeaderboard(): Promise<void> {
   }
 }
 
-function onchainSummary(): string {
-  if (!onchainRecord) return '';
-  return `On-chain (Stellar testnet): floor ${onchainRecord.best_floor} / 3, ${onchainRecord.best_relics} relics, ${onchainRecord.total_runs} runs`;
+/** Opens a run on chain so the contract issues the seed. Falls back to a practice run. */
+async function beginRun(): Promise<void> {
+  if (starting) return;
+  starting = true;
+  const chosen = heroId;
+  saveHero(chosen);
+  chainStatus = '';
+  chainTx = '';
+  chainRank = null;
+  try {
+    const ticket = await withTimeout(
+      enqueue(async () => {
+        const keypair = await getPlayerKeypair();
+        for (let attempt = 0; ; attempt += 1) {
+          try {
+            return await startRun(keypair, HERO_CODE[chosen]);
+          } catch (err) {
+            const cooling = isContractError(err, CONTRACT_ERROR.StartCooldown);
+            if (!cooling || attempt >= START_RETRIES) throw err;
+            await sleep(START_RETRY_MS);
+          }
+        }
+      }),
+      START_TIMEOUT_MS
+    );
+    resetMotion();
+    run = newRun(chosen, ticket.seed);
+    practice = false;
+  } catch (err) {
+    console.warn('Deepmark: could not open a verified run, starting a practice run', err);
+    resetMotion();
+    run = newRun(chosen);
+    practice = true;
+  } finally {
+    starting = false;
+  }
 }
 
-async function submitToChain(floorReached: number, relicsKept: number): Promise<void> {
-  chainStatus = 'Saving to Stellar testnet...';
+/** Sends the action log. The contract replays it and decides the result. */
+async function verifyOnChain(finished: RunState): Promise<void> {
+  chainStatus = 'Verifying on Stellar...';
   try {
-    const keypair = await getPlayerKeypair();
-    const { hash, record } = await submitRunResult(keypair, floorReached, relicsKept);
-    onchainRecord = record;
-    chainRead = 'ready';
-    chainStatus = hash ? `Saved on-chain (tx ${hash.slice(0, 8)}...)` : 'Saved on-chain';
+    const { hash, outcome } = await enqueue(async () => finishRun(await getPlayerKeypair(), finished.actions));
+    chainTx = hash;
+    const relicsMatch =
+      outcome.relics_common + outcome.relics_rare + outcome.relics_core === finished.relicsThisRun;
+    const agrees =
+      outcome.floor_reached === finished.floorNumber &&
+      outcome.score === finished.scoreThisRun &&
+      outcome.hp_left === finished.player.hp &&
+      relicsMatch;
+    if (!agrees) console.error('Deepmark: the contract result differs from the local simulation', outcome);
+    chainStatus = agrees ? 'Verified on Stellar' : 'Verified on Stellar (this browser disagreed, the chain result stands)';
+    await refreshOnchain();
+    const top = await fetchTop();
+    const position = top.findIndex((entry) => entry.player === playerAddress);
+    chainRank = position >= 0 ? position + 1 : null;
     leaderboardRows = null;
   } catch (err) {
-    console.warn('Deepmark: failed to record this run on-chain', err);
-    chainStatus = 'Could not save to Stellar this time';
+    console.warn('Deepmark: failed to verify this run on-chain', err);
+    chainStatus = 'Could not verify this run on Stellar this time';
   }
+}
+
+/** A run that grows past what the contract accepts can no longer be verified. */
+function endExhaustedRun(state: RunState): void {
+  if (state.mode === 'result') return;
+  state.mode = 'result';
+  state.resultKind = 'dead';
+  state.relicsThisRun = 0;
+  state.scoreThisRun = 0;
+  practice = true;
+  chainStatus = 'This run grew too long to be verified.';
 }
 
 const DIRS: Partial<Record<Action, [number, number]>> = {
@@ -146,13 +256,13 @@ function handleEvent(event: GameEvent): void {
     case 'extracted':
       sfxExtracted();
       progress = loadProgress();
-      if (run) void submitToChain(run.floorNumber, run.relicsThisRun);
+      if (run && !practice) void verifyOnChain(run);
       break;
     case 'dead':
       sfxDead();
       triggerShake(250, 10);
       progress = loadProgress();
-      if (run) void submitToChain(run.floorNumber, run.relicsThisRun);
+      if (run && !practice) void verifyOnChain(run);
       break;
     case 'combatStart':
       break;
@@ -177,17 +287,15 @@ onAction((action) => {
     return;
   }
 
+  if (starting) return;
+
   if (!run) {
     if (action === 'pickLantern' || action === 'left') heroId = 'lantern';
     if (action === 'pickCinder' || action === 'right') heroId = 'cinder';
     if (action === 'pickLantern' || action === 'pickCinder' || action === 'left' || action === 'right') {
       saveHero(heroId);
     }
-    if (action === 'confirm') {
-      saveHero(heroId);
-      resetMotion();
-      run = newRun(heroId);
-    }
+    if (action === 'confirm') void beginRun();
     if (action === 'stats') showStats = true;
     if (action === 'leaderboard') void openLeaderboard();
     return;
@@ -198,6 +306,8 @@ onAction((action) => {
       resetMotion();
       run = null;
       chainStatus = '';
+      chainTx = '';
+      chainRank = null;
     }
     return;
   }
@@ -216,6 +326,7 @@ onAction((action) => {
     }
   }
 
+  if (run.exhausted) endExhaustedRun(run);
   for (const event of drainEvents(run)) handleEvent(event);
 });
 
@@ -233,10 +344,14 @@ function frame(): void {
     playerAddress,
     run,
     progress,
-    onchainSummary: onchainSummary(),
     onchain: onchainSnapshot(),
+    relics: relicBalances,
     chainRead,
     chainStatus,
+    chainTx,
+    chainRank,
+    starting,
+    practice,
     heroId,
   });
   requestAnimationFrame(frame);

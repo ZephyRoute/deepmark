@@ -25,8 +25,16 @@ pub const HERO_CINDER: u32 = 1;
 
 pub fn hero(id: u32) -> Option<Hero> {
     match id {
-        HERO_LANTERN => Some(Hero { max_hp: 10, dmg_min: 2, dmg_max: 4 }),
-        HERO_CINDER => Some(Hero { max_hp: 8, dmg_min: 3, dmg_max: 5 }),
+        HERO_LANTERN => Some(Hero {
+            max_hp: 10,
+            dmg_min: 2,
+            dmg_max: 4,
+        }),
+        HERO_CINDER => Some(Hero {
+            max_hp: 8,
+            dmg_min: 3,
+            dmg_max: 5,
+        }),
         _ => None,
     }
 }
@@ -48,10 +56,26 @@ pub struct Archetype {
 
 pub fn archetype(kind: EnemyKind) -> Archetype {
     match kind {
-        EnemyKind::Warden => Archetype { max_hp: 6, dmg_min: 1, dmg_max: 3 },
-        EnemyKind::Skitter => Archetype { max_hp: 4, dmg_min: 1, dmg_max: 2 },
-        EnemyKind::Adept => Archetype { max_hp: 9, dmg_min: 2, dmg_max: 4 },
-        EnemyKind::WardenPrime => Archetype { max_hp: 12, dmg_min: 2, dmg_max: 4 },
+        EnemyKind::Warden => Archetype {
+            max_hp: 6,
+            dmg_min: 1,
+            dmg_max: 3,
+        },
+        EnemyKind::Skitter => Archetype {
+            max_hp: 4,
+            dmg_min: 1,
+            dmg_max: 2,
+        },
+        EnemyKind::Adept => Archetype {
+            max_hp: 9,
+            dmg_min: 2,
+            dmg_max: 4,
+        },
+        EnemyKind::WardenPrime => Archetype {
+            max_hp: 12,
+            dmg_min: 2,
+            dmg_max: 4,
+        },
     }
 }
 
@@ -99,31 +123,82 @@ const DETOUR_Y: i32 = 1;
 const FLOOR_ONE: Floor = Floor {
     number: 1,
     start: Point { x: 2, y: LANE_Y },
-    stairs: Point { x: GRID_WIDTH - 3, y: LANE_Y },
+    stairs: Point {
+        x: GRID_WIDTH - 3,
+        y: LANE_Y,
+    },
     is_final: false,
-    enemies: &[EnemyPlacement { at: Point { x: DIVIDER_X, y: LANE_Y }, kind: EnemyKind::Warden }],
-    relics: &[RelicPlacement { at: Point { x: POCKET_X, y: LANE_Y }, kind: RelicKind::Common }],
+    enemies: &[EnemyPlacement {
+        at: Point {
+            x: DIVIDER_X,
+            y: LANE_Y,
+        },
+        kind: EnemyKind::Warden,
+    }],
+    relics: &[RelicPlacement {
+        at: Point {
+            x: POCKET_X,
+            y: LANE_Y,
+        },
+        kind: RelicKind::Common,
+    }],
 };
 
 const FLOOR_TWO: Floor = Floor {
     number: 2,
     start: Point { x: 2, y: LANE_Y },
-    stairs: Point { x: GRID_WIDTH - 3, y: LANE_Y },
+    stairs: Point {
+        x: GRID_WIDTH - 3,
+        y: LANE_Y,
+    },
     is_final: false,
     enemies: &[
-        EnemyPlacement { at: Point { x: DIVIDER_X, y: DETOUR_Y }, kind: EnemyKind::Skitter },
-        EnemyPlacement { at: Point { x: DIVIDER_X, y: LANE_Y }, kind: EnemyKind::Adept },
+        EnemyPlacement {
+            at: Point {
+                x: DIVIDER_X,
+                y: DETOUR_Y,
+            },
+            kind: EnemyKind::Skitter,
+        },
+        EnemyPlacement {
+            at: Point {
+                x: DIVIDER_X,
+                y: LANE_Y,
+            },
+            kind: EnemyKind::Adept,
+        },
     ],
-    relics: &[RelicPlacement { at: Point { x: POCKET_X, y: LANE_Y }, kind: RelicKind::Rare }],
+    relics: &[RelicPlacement {
+        at: Point {
+            x: POCKET_X,
+            y: LANE_Y,
+        },
+        kind: RelicKind::Rare,
+    }],
 };
 
 const FLOOR_THREE: Floor = Floor {
     number: 3,
     start: Point { x: 2, y: LANE_Y },
-    stairs: Point { x: GRID_WIDTH - 2, y: LANE_Y },
+    stairs: Point {
+        x: GRID_WIDTH - 2,
+        y: LANE_Y,
+    },
     is_final: true,
-    enemies: &[EnemyPlacement { at: Point { x: DIVIDER_X, y: LANE_Y }, kind: EnemyKind::WardenPrime }],
-    relics: &[RelicPlacement { at: Point { x: DIVIDER_X + 3, y: LANE_Y }, kind: RelicKind::Core }],
+    enemies: &[EnemyPlacement {
+        at: Point {
+            x: DIVIDER_X,
+            y: LANE_Y,
+        },
+        kind: EnemyKind::WardenPrime,
+    }],
+    relics: &[RelicPlacement {
+        at: Point {
+            x: DIVIDER_X + 3,
+            y: LANE_Y,
+        },
+        kind: RelicKind::Core,
+    }],
 };
 
 pub fn floor(number: u32) -> &'static Floor {
@@ -204,8 +279,22 @@ mod tests {
 
     #[test]
     fn heroes_match_the_shipped_stats() {
-        assert_eq!(hero(HERO_LANTERN), Some(Hero { max_hp: 10, dmg_min: 2, dmg_max: 4 }));
-        assert_eq!(hero(HERO_CINDER), Some(Hero { max_hp: 8, dmg_min: 3, dmg_max: 5 }));
+        assert_eq!(
+            hero(HERO_LANTERN),
+            Some(Hero {
+                max_hp: 10,
+                dmg_min: 2,
+                dmg_max: 4
+            })
+        );
+        assert_eq!(
+            hero(HERO_CINDER),
+            Some(Hero {
+                max_hp: 8,
+                dmg_min: 3,
+                dmg_max: 5
+            })
+        );
         assert_eq!(hero(2), None);
     }
 }

@@ -16,12 +16,20 @@ const ACTIONS_SHIFT: u32 = 8;
 /// floor, then HP left, then fewer actions.
 pub fn rank_key(outcome: &Outcome) -> u64 {
     let extracted = outcome.ending == Ending::Extracted;
-    let score = if extracted { outcome.score.min(0xFF) as u64 } else { 0 };
+    let score = if extracted {
+        outcome.score.min(0xFF) as u64
+    } else {
+        0
+    };
     let floor = outcome.floor_reached.min(0xFF) as u64;
     let hp = outcome.hp_left.min(0xFF) as u64;
     let speed = (ACTIONS_CEILING - outcome.actions.min(ACTIONS_CEILING)) as u64;
     let banked = if extracted { 1u64 } else { 0 };
-    (banked << EXTRACTED_SHIFT) | (score << SCORE_SHIFT) | (floor << FLOOR_SHIFT) | (hp << HP_SHIFT) | (speed << ACTIONS_SHIFT)
+    (banked << EXTRACTED_SHIFT)
+        | (score << SCORE_SHIFT)
+        | (floor << FLOOR_SHIFT)
+        | (hp << HP_SHIFT)
+        | (speed << ACTIONS_SHIFT)
 }
 
 /// Fold one verified run into a profile. Returns the updated profile and
@@ -37,7 +45,11 @@ pub fn apply_outcome(
     if is_new_best {
         record.best_key = key;
         record.best_floor = outcome.floor_reached;
-        record.best_score = if outcome.ending == Ending::Extracted { outcome.score } else { 0 };
+        record.best_score = if outcome.ending == Ending::Extracted {
+            outcome.score
+        } else {
+            0
+        };
         record.best_hp_left = outcome.hp_left;
         record.best_actions = outcome.actions;
     }

@@ -3,20 +3,27 @@ import { MAX_FLOOR } from '../game/floor';
 import { HEROES, type HeroId } from '../game/heroes';
 import type { Progress } from '../game/progress';
 import type { RunState } from '../game/state';
+import { STELLAR_CONFIG } from '../stellar/config';
+import type { RelicBalances } from '../stellar/relics';
 
 export interface LeaderboardRow {
   address: string;
-  bestFloor: number;
-  bestRelics: number;
-  totalRuns: number;
+  score: number;
+  floor: number;
+  hpLeft: number;
+  actions: number;
 }
 
 export type ChainRead = 'loading' | 'ready' | 'unavailable';
 
 export interface OnchainSnapshot {
   bestFloor: number;
-  bestRelics: number;
-  totalRuns: number;
+  bestScore: number;
+  runs: number;
+  extractions: number;
+  deaths: number;
+  forfeits: number;
+  relicsBanked: number;
 }
 
 export interface ChromeView {
@@ -27,11 +34,27 @@ export interface ChromeView {
   playerAddress: string;
   run: RunState | null;
   progress: Progress;
-  onchainSummary: string;
   onchain: OnchainSnapshot | null;
+  relics: RelicBalances | null;
   chainRead: ChainRead;
   chainStatus: string;
+  chainTx: string;
+  chainRank: number | null;
+  starting: boolean;
+  practice: boolean;
   heroId: HeroId;
+}
+
+const TX_HASH = /^[a-f0-9]{64}$/;
+const WAITING_TEXT = 'Lowering the lantern. Your run is being opened on Stellar.';
+
+function relicSummary(relics: RelicBalances | null): string {
+  if (!relics) return '';
+  const parts: string[] = [];
+  if (relics.common > 0) parts.push(`${relics.common} common`);
+  if (relics.rare > 0) parts.push(`${relics.rare} rare`);
+  if (relics.core > 0) parts.push(`${relics.core} core`);
+  return parts.join(', ');
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -93,7 +116,7 @@ function renderOverlay(view: ChromeView): void {
 
   if (view.run.mode === 'result') {
     overlay.hidden = false;
-    overlay.append(resultCard(view.run, view.progress, view.chainStatus));
+    overlay.append(resultCard(view));
     return;
   }
 
@@ -111,22 +134,25 @@ function renderOverlay(view: ChromeView): void {
 function overlaySignature(view: ChromeView): string {
   if (view.showLeaderboard) {
     const rows = view.leaderboardRows
-      ?.map((row) => `${row.address}:${row.bestFloor}:${row.bestRelics}:${row.totalRuns}`)
+      ?.map((row) => `${row.address}:${row.score}:${row.floor}:${row.hpLeft}:${row.actions}`)
       .join('|');
     return `board:${view.leaderboardLoading}:${rows ?? ''}:${view.playerAddress}`;
   }
   if (view.showStats) {
     const progress = view.progress;
     const chain = view.onchain
-      ? `${view.onchain.bestFloor}:${view.onchain.bestRelics}:${view.onchain.totalRuns}`
+      ? `${view.onchain.bestFloor}:${view.onchain.bestScore}:${view.onchain.runs}:${view.onchain.extractions}:${view.onchain.deaths}:${view.onchain.forfeits}:${view.onchain.relicsBanked}`
       : '';
-    return `stats:${view.chainRead}:${chain}:${view.playerAddress}:${progress.runsPlayed}:${progress.extractions}:${progress.deaths}:${progress.bestFloor}:${progress.bestRelics}:${progress.bestScore}:${progress.relicsKept}:${progress.lanternRuns}:${progress.cinderRuns}`;
+    const vault = view.relics ? `${view.relics.common}:${view.relics.rare}:${view.relics.core}` : '';
+    return `stats:${view.chainRead}:${chain}:${vault}:${view.playerAddress}:${progress.runsPlayed}:${progress.extractions}:${progress.deaths}:${progress.bestFloor}:${progress.bestRelics}:${progress.bestScore}:${progress.relicsKept}:${progress.lanternRuns}:${progress.cinderRuns}`;
   }
   if (!view.run) {
-    return `title:${view.heroId}:${view.progress.runsPlayed}:${view.progress.bestFloor}:${view.progress.bestRelics}:${view.onchainSummary}`;
+    const chain = view.onchain ? `${view.onchain.bestScore}:${view.onchain.bestFloor}:${view.onchain.runs}` : '';
+    const vault = view.relics ? `${view.relics.common}:${view.relics.rare}:${view.relics.core}` : '';
+    return `title:${view.heroId}:${view.starting}:${view.progress.runsPlayed}:${view.progress.bestFloor}:${view.progress.bestRelics}:${chain}:${vault}`;
   }
   if (view.run.mode === 'result') {
-    return `result:${view.run.resultKind}:${view.run.floorNumber}:${view.run.relicsThisRun}:${view.run.scoreThisRun}:${view.run.player.hp}:${view.run.newBest}:${view.chainStatus}:${view.progress.bestFloor}:${view.progress.bestRelics}`;
+    return `result:${view.run.resultKind}:${view.run.floorNumber}:${view.run.relicsThisRun}:${view.run.scoreThisRun}:${view.run.player.hp}:${view.run.newBest}:${view.chainStatus}:${view.chainRank ?? ''}:${view.chainTx}:${view.practice}:${view.progress.bestFloor}:${view.progress.bestRelics}`;
   }
   if (view.run.mode === 'combat') {
     const enemy = view.run.activeEnemyIndex !== null ? view.run.enemies[view.run.activeEnemyIndex] : undefined;
@@ -148,10 +174,17 @@ function titleCard(view: ChromeView): HTMLElement {
   picks.append(heroPick('cinder', view.heroId));
   card.append(picks);
   const actions = el('div', 'title-actions');
-  actions.append(button('Descend', 'confirm', 'btn btn-primary'));
+  const descend = button(view.starting ? 'Descending...' : 'Descend', 'confirm', 'btn btn-primary');
+  descend.disabled = view.starting;
+  actions.append(descend);
   actions.append(button('Stats', 'stats', 'btn'));
   actions.append(button('Leaderboard', 'leaderboard', 'btn'));
   card.append(actions);
+  if (view.starting) {
+    const waiting = el('p', 'chain', WAITING_TEXT);
+    waiting.setAttribute('role', 'status');
+    card.append(waiting);
+  }
 
   if (view.progress.runsPlayed > 0) {
     card.append(
@@ -162,7 +195,17 @@ function titleCard(view: ChromeView): HTMLElement {
       )
     );
   }
-  if (view.onchainSummary) card.append(el('p', 'chain', view.onchainSummary));
+  if (view.onchain && view.onchain.runs > 0) {
+    card.append(
+      el(
+        'p',
+        'chain',
+        `Verified on Stellar: best score ${view.onchain.bestScore}, floor ${view.onchain.bestFloor} / ${MAX_FLOOR}, ${view.onchain.runs} runs`
+      )
+    );
+  }
+  const vault = relicSummary(view.relics);
+  if (vault) card.append(el('p', 'chain', `Relics in your vault: ${vault}`));
   card.append(el('p', 'hint', 'Left and right choose a delver. Enter descends. M opens your record. WASD moves. Esc retreats or extracts.'));
   const network = el('a', 'quiet-link', 'All players');
   network.href = '/stats';
@@ -190,12 +233,14 @@ function heroPick(id: HeroId, selectedId: HeroId): HTMLButtonElement {
 function leaderboardCard(view: ChromeView): HTMLElement {
   const card = el('div', 'panel panel-scroll');
   card.append(el('h2', 'panel-title', 'Leaderboard'));
-  card.append(el('p', 'panel-sub', 'Read live from the deployed Stellar testnet contract.'));
+  card.append(
+    el('p', 'panel-sub', 'Best verified runs. The contract replays every run before it is ranked.')
+  );
 
   if (view.leaderboardLoading) {
     card.append(el('p', 'panel-body', 'Loading records...'));
   } else if (!view.leaderboardRows || view.leaderboardRows.length === 0) {
-    card.append(el('p', 'panel-body', 'No runs recorded on-chain yet.'));
+    card.append(el('p', 'panel-body', 'No verified runs yet. Be the first.'));
   } else {
     const table = el('ol', 'board');
     view.leaderboardRows.forEach((row, index) => {
@@ -205,17 +250,19 @@ function leaderboardCard(view: ChromeView): HTMLElement {
         ? `${shortenAddress(row.address)} (you)`
         : shortenAddress(row.address);
       item.append(el('span', 'board-who', who));
-      item.append(el('span', 'board-stat', `${row.bestFloor}/${MAX_FLOOR}`));
-      item.append(el('span', 'board-stat', `${row.bestRelics}`));
-      item.append(el('span', 'board-stat', `${row.totalRuns}`));
+      item.append(el('span', 'board-stat', `${row.score}`));
+      item.append(el('span', 'board-stat', `${row.floor}/${MAX_FLOOR}`));
+      item.append(el('span', 'board-stat', `${row.hpLeft}`));
+      item.append(el('span', 'board-stat', `${row.actions}`));
       table.append(item);
     });
     const head = el('div', 'board-head');
     head.append(el('span', '', '#'));
     head.append(el('span', '', 'Player'));
+    head.append(el('span', '', 'Score'));
     head.append(el('span', '', 'Floor'));
-    head.append(el('span', '', 'Relics'));
-    head.append(el('span', '', 'Runs'));
+    head.append(el('span', '', 'HP'));
+    head.append(el('span', '', 'Moves'));
     card.append(head, table);
   }
 
@@ -296,12 +343,25 @@ function statsCard(view: ChromeView): HTMLElement {
   } else if (!view.onchain) {
     chain.append(el('p', 'panel-body', 'No run recorded for you on Stellar yet.'));
   } else {
-    chain.append(el('p', 'panel-sub', 'Best floor, best relics, and how many runs were recorded.'));
+    chain.append(el('p', 'panel-sub', 'Every number here was derived by the contract replaying your runs.'));
     chain.append(
       metricGrid([
+        metric(String(view.onchain.bestScore), 'Best score'),
         metric(`${view.onchain.bestFloor} / ${MAX_FLOOR}`, 'Best floor'),
-        metric(String(view.onchain.bestRelics), 'Best relics'),
-        metric(String(view.onchain.totalRuns), 'Runs'),
+        metric(String(view.onchain.runs), 'Runs'),
+        metric(String(view.onchain.extractions), 'Extracted'),
+        metric(String(view.onchain.deaths), 'Lost'),
+        metric(String(view.onchain.forfeits), 'Abandoned'),
+        metric(String(view.onchain.relicsBanked), 'Relics banked'),
+      ])
+    );
+  }
+  if (view.relics) {
+    chain.append(
+      metricGrid([
+        metric(String(view.relics.common), 'Common relics'),
+        metric(String(view.relics.rare), 'Rare relics'),
+        metric(String(view.relics.core), 'Core relics'),
       ])
     );
   }
@@ -335,7 +395,8 @@ function choiceCard(run: RunState): HTMLElement {
   return card;
 }
 
-function resultCard(run: RunState, progress: Progress, chainStatus: string): HTMLElement {
+function resultCard(view: ChromeView): HTMLElement {
+  const run = view.run as RunState;
   const won = run.resultKind === 'extracted';
   const card = el('div', won ? 'panel result result-win' : 'panel result result-loss');
   card.append(el('h2', 'panel-title', won ? 'Extracted' : 'Lost in the dark'));
@@ -344,9 +405,23 @@ function resultCard(run: RunState, progress: Progress, chainStatus: string): HTM
   if (won) card.append(el('p', 'panel-body', `HP remaining ${run.player.hp}`));
   if (run.newBest) card.append(el('p', 'new-best', 'New best'));
   card.append(
-    el('p', 'stats', `Best floor ${progress.bestFloor} / ${MAX_FLOOR}  ·  Best relics ${progress.bestRelics}`)
+    el('p', 'stats', `Best floor ${view.progress.bestFloor} / ${MAX_FLOOR}  ·  Best relics ${view.progress.bestRelics}`)
   );
-  if (chainStatus) card.append(el('p', 'chain', chainStatus));
+  if (view.practice) {
+    card.append(el('p', 'chain', view.chainStatus || 'Practice run. This one is not recorded on Stellar.'));
+  } else if (view.chainStatus) {
+    const status = el('p', 'chain', view.chainStatus);
+    status.setAttribute('role', 'status');
+    card.append(status);
+    if (view.chainRank !== null) card.append(el('p', 'chain', `Leaderboard rank #${view.chainRank}`));
+    if (TX_HASH.test(view.chainTx)) {
+      const link = el('a', 'quiet-link', 'View the transaction');
+      link.href = `${STELLAR_CONFIG.explorerUrl}/tx/${view.chainTx}`;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      card.append(link);
+    }
+  }
   card.append(button('Title screen', 'confirm', 'btn btn-primary'));
   return card;
 }
@@ -367,6 +442,7 @@ export function syncChrome(view: ChromeView): void {
     setText('hud-hp', `HP ${view.run.player.hp}/${view.run.player.maxHp}`);
     setText('hud-relics', `Relics ${view.run.relicsThisRun}`);
     setText('hud-score', `Score ${view.run.scoreThisRun}`);
+    setText('hud-mode', view.practice ? 'Practice, not recorded' : '');
     const lastLine = view.run.log[view.run.log.length - 1] ?? '';
     setText('hud-log', lastLine);
   } else if (view.showStats) {

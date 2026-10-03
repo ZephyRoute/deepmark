@@ -106,6 +106,10 @@ pub enum DataKey {
     Run(Address),
 }
 
+/// Classic assets carry seven decimals. One relic is minted as one whole unit
+/// so a wallet shows `1.0000000 DMCOMMON`, not a dust amount.
+pub const RELIC_UNIT: i128 = 10_000_000;
+
 pub const DAY_IN_LEDGERS: u32 = 17_280;
 pub const TTL_THRESHOLD: u32 = 30 * DAY_IN_LEDGERS;
 pub const TTL_EXTEND_TO: u32 = 120 * DAY_IN_LEDGERS;
