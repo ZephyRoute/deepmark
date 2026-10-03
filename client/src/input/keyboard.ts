@@ -9,6 +9,7 @@ export type Action =
   | 'stats'
   | 'vault'
   | 'mute'
+  | 'retryVerify'
   | 'tabFresh'
   | 'tabVeteran'
   | 'pickLantern'
@@ -43,6 +44,7 @@ const ACTIONS: readonly Action[] = [
   'stats',
   'vault',
   'mute',
+  'retryVerify',
   'tabFresh',
   'tabVeteran',
   'pickLantern',

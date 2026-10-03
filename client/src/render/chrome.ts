@@ -46,6 +46,7 @@ export interface ChromeView {
   onVeteran: (id: number) => void;
   boardTab: BoardTab;
   chainHeroId: number | null;
+  canRetry: boolean;
   showLeaderboard: boolean;
   showStats: boolean;
   leaderboardLoading: boolean;
@@ -188,7 +189,7 @@ function overlaySignature(view: ChromeView): string {
     return `title:${view.starting}:${view.progress.runsPlayed}:${view.progress.bestFloor}:${view.progress.bestRelics}:${chain}:${vault}`;
   }
   if (view.run.mode === 'result') {
-    return `result:${view.run.resultKind}:${view.run.floorNumber}:${view.run.relicsThisRun}:${view.run.scoreThisRun}:${view.run.player.hp}:${view.run.newBest}:${view.chainStatus}:${view.chainRank ?? ''}:${view.chainTx}:${view.practice}:${view.chainHeroId ?? ''}:${view.progress.bestFloor}:${view.progress.bestRelics}`;
+    return `result:${view.run.resultKind}:${view.run.floorNumber}:${view.run.relicsThisRun}:${view.run.scoreThisRun}:${view.run.player.hp}:${view.run.newBest}:${view.chainStatus}:${view.chainRank ?? ''}:${view.chainTx}:${view.practice}:${view.chainHeroId ?? ''}:${view.canRetry}:${view.progress.bestFloor}:${view.progress.bestRelics}`;
   }
   if (view.run.mode === 'combat') {
     const enemy = view.run.activeEnemyIndex !== null ? view.run.enemies[view.run.activeEnemyIndex] : undefined;
@@ -505,6 +506,7 @@ function resultCard(view: ChromeView): HTMLElement {
       card.append(link);
     }
   }
+  if (view.canRetry) card.append(button('Try again', 'retryVerify', 'btn'));
   card.append(button('Title screen', 'confirm', 'btn btn-primary'));
   return card;
 }

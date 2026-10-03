@@ -44,6 +44,7 @@ import {
   isContractError,
   startRun,
   veteranChoice,
+  type FinishedRun,
   type Hero,
   type HeroChoice,
   type PlayerRecord,
@@ -72,6 +73,8 @@ let vaultHeroes: Hero[] | null = null;
 let vaultLoading = false;
 let boardTab: BoardTab = 'fresh';
 let chainHeroId: number | null = null;
+let canRetry = false;
+let failedRun: RunState | null = null;
 let runWasVeteran = false;
 let showLeaderboard = false;
 let showStats = false;
@@ -262,30 +265,81 @@ async function beginRun(plan: DelverPlan): Promise<void> {
 }
 
 /** Sends the action log. The contract replays it and decides the result. */
+const VERIFY_ATTEMPTS = 6;
+const VERIFY_RETRY_MS = 6_000;
+
+/** The contract's own refusals do not heal by waiting. Only TooFast and network trouble do. */
+function isPermanentFailure(err: unknown): boolean {
+  if (!(err instanceof Error) || !err.message.includes('Error(Contract, #')) return false;
+  return !isContractError(err, CONTRACT_ERROR.TooFast);
+}
+
+function describeFailure(err: unknown): string {
+  if (isContractError(err, CONTRACT_ERROR.RunNotStarted)) {
+    return 'This run is no longer open on Stellar. It was already settled or it expired.';
+  }
+  if (isContractError(err, CONTRACT_ERROR.NotHeroOwner)) return 'This delver changed hands during the run, so it cannot be settled.';
+  if (
+    isContractError(err, CONTRACT_ERROR.RunIncomplete) ||
+    isContractError(err, CONTRACT_ERROR.TrailingActions) ||
+    isContractError(err, CONTRACT_ERROR.InvalidAction)
+  ) {
+    return 'The contract could not reproduce this run, so it was not recorded.';
+  }
+  return 'Stellar could not be reached to settle this run.';
+}
+
+/** Sends the log, waiting out the contract's minimum play time and brief network trouble. */
+async function submitLog(finished: RunState): Promise<FinishedRun> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await enqueue(async () => finishRun(await getPlayerKeypair(), finished.actions));
+    } catch (err) {
+      if (isPermanentFailure(err) || attempt >= VERIFY_ATTEMPTS - 1) throw err;
+      chainStatus = 'Waiting for Stellar to settle this run...';
+      await sleep(VERIFY_RETRY_MS);
+    }
+  }
+}
+
 async function verifyOnChain(finished: RunState): Promise<void> {
   chainStatus = 'Verifying on Stellar...';
+  canRetry = false;
+  let settled: FinishedRun;
   try {
-    const { hash, outcome } = await enqueue(async () => finishRun(await getPlayerKeypair(), finished.actions));
-    chainTx = hash;
-    chainHeroId = outcome.hero_id ?? null;
-    if (chainHeroId !== null) vaultHeroes = null;
-    const relicsMatch =
-      outcome.relics_common + outcome.relics_rare + outcome.relics_core === finished.relicsThisRun;
-    const agrees =
-      outcome.floor_reached === finished.floorNumber &&
-      outcome.score === finished.scoreThisRun &&
-      outcome.hp_left === finished.player.hp &&
-      relicsMatch;
-    if (!agrees) console.error('Deepmark: the contract result differs from the local simulation', outcome);
-    chainStatus = agrees ? 'Verified on Stellar' : 'Verified on Stellar (this browser disagreed, the chain result stands)';
+    settled = await submitLog(finished);
+  } catch (err) {
+    console.warn('Deepmark: failed to verify this run on-chain', err);
+    chainStatus = describeFailure(err);
+    canRetry = !isPermanentFailure(err);
+    failedRun = finished;
+    return;
+  }
+
+  const { hash, outcome } = settled;
+  failedRun = null;
+  chainTx = hash;
+  chainHeroId = outcome.hero_id ?? null;
+  if (chainHeroId !== null) vaultHeroes = null;
+  const relicsMatch = outcome.relics_common + outcome.relics_rare + outcome.relics_core === finished.relicsThisRun;
+  const agrees =
+    outcome.floor_reached === finished.floorNumber &&
+    outcome.score === finished.scoreThisRun &&
+    outcome.hp_left === finished.player.hp &&
+    relicsMatch;
+  if (!agrees) console.error('Deepmark: the contract result differs from the local simulation', outcome);
+  chainStatus = agrees ? 'Verified on Stellar' : 'Verified on Stellar (this browser disagreed, the chain result stands)';
+
+  // The run is settled. Anything below only decorates the result screen, so a
+  // failure here must never turn a confirmed transaction into an error.
+  try {
     await refreshOnchain();
     const top = runWasVeteran ? await fetchTopVeteran() : await fetchTopFresh();
     const position = top.findIndex((entry) => entry.player === playerAddress);
     chainRank = position >= 0 ? position + 1 : null;
     leaderboardRows = null;
   } catch (err) {
-    console.warn('Deepmark: failed to verify this run on-chain', err);
-    chainStatus = 'Could not verify this run on Stellar this time';
+    console.warn('Deepmark: could not refresh the leaderboard rank', err);
   }
 }
 
@@ -427,7 +481,9 @@ onAction((action) => {
       chainStatus = '';
       chainTx = '';
       chainRank = null;
+      canRetry = false;
     }
+    if (action === 'retryVerify' && failedRun) void verifyOnChain(failedRun);
     return;
   }
 
@@ -480,6 +536,7 @@ function frame(): void {
     },
     boardTab,
     chainHeroId,
+    canRetry,
     showLeaderboard,
     showStats,
     leaderboardLoading,
