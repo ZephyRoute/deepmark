@@ -1,60 +1,135 @@
-//! Pure game rules for deepmark-contract, kept free of `Env` and storage so
-//! they can be unit tested directly.
+//! Pure rules for deepmark-contract: ranking and profile updates. No `Env`,
+//! no storage, so they are unit tested directly.
 
-use crate::components::{PlayerRecord, MAX_FLOOR};
+use crate::components::PlayerRecord;
+use crate::sim::{Ending, Outcome};
 
-/// Fold one finished run into a player's existing record.
-///
-/// `floor_reached` is clamped to `MAX_FLOOR` first: the client cannot claim
-/// progress past the floor the shipped game actually contains. Returns the
-/// updated record and whether this run set a new personal best (floor or
-/// relics), which the client uses for the "NEW BEST!" moment regardless of
-/// whether the run ended in extraction or death.
-pub fn apply_run(existing: Option<PlayerRecord>, floor_reached: u32, relics_kept: u32) -> (PlayerRecord, bool) {
-    let floor_reached = floor_reached.min(MAX_FLOOR);
-    let previous = existing.unwrap_or_else(PlayerRecord::empty);
+const EXTRACTED_SHIFT: u32 = 48;
+const SCORE_SHIFT: u32 = 40;
+const FLOOR_SHIFT: u32 = 32;
+const HP_SHIFT: u32 = 24;
+const ACTIONS_CEILING: u32 = 0xFFFF;
+const ACTIONS_SHIFT: u32 = 8;
 
-    let is_new_best = floor_reached > previous.best_floor || relics_kept > previous.best_relics;
+/// Packs the ranking criteria into one integer so ordering is a single
+/// compare. Higher is better: extracted beats dead, then banked score, then
+/// floor, then HP left, then fewer actions.
+pub fn rank_key(outcome: &Outcome) -> u64 {
+    let extracted = outcome.ending == Ending::Extracted;
+    let score = if extracted { outcome.score.min(0xFF) as u64 } else { 0 };
+    let floor = outcome.floor_reached.min(0xFF) as u64;
+    let hp = outcome.hp_left.min(0xFF) as u64;
+    let speed = (ACTIONS_CEILING - outcome.actions.min(ACTIONS_CEILING)) as u64;
+    let banked = if extracted { 1u64 } else { 0 };
+    (banked << EXTRACTED_SHIFT) | (score << SCORE_SHIFT) | (floor << FLOOR_SHIFT) | (hp << HP_SHIFT) | (speed << ACTIONS_SHIFT)
+}
 
-    let updated = PlayerRecord {
-        best_floor: previous.best_floor.max(floor_reached),
-        best_relics: previous.best_relics.max(relics_kept),
-        total_runs: previous.total_runs.saturating_add(1),
-    };
+/// Fold one verified run into a profile. Returns the updated profile and
+/// whether the run improved the player's best.
+pub fn apply_outcome(
+    existing: Option<PlayerRecord>,
+    outcome: &Outcome,
+    key: u64,
+) -> (PlayerRecord, bool) {
+    let mut record = existing.unwrap_or_else(PlayerRecord::empty);
+    let is_new_best = key > record.best_key;
 
-    (updated, is_new_best)
+    if is_new_best {
+        record.best_key = key;
+        record.best_floor = outcome.floor_reached;
+        record.best_score = if outcome.ending == Ending::Extracted { outcome.score } else { 0 };
+        record.best_hp_left = outcome.hp_left;
+        record.best_actions = outcome.actions;
+    }
+    record.total_runs = record.total_runs.saturating_add(1);
+    match outcome.ending {
+        Ending::Extracted => {
+            record.extractions = record.extractions.saturating_add(1);
+            let relics = outcome.relics_common + outcome.relics_rare + outcome.relics_core;
+            record.relics_banked = record.relics_banked.saturating_add(relics);
+        }
+        Ending::Dead => record.deaths = record.deaths.saturating_add(1),
+    }
+    (record, is_new_best)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn first_run_becomes_the_record() {
-        let (record, is_new_best) = apply_run(None, 2, 3);
-        assert_eq!(record, PlayerRecord { best_floor: 2, best_relics: 3, total_runs: 1 });
-        assert!(is_new_best);
+    fn outcome(ending: Ending, floor: u32, score: u32, hp: u32, actions: u32) -> Outcome {
+        Outcome {
+            ending,
+            floor_reached: floor,
+            relics_common: if score > 0 { 1 } else { 0 },
+            relics_rare: 0,
+            relics_core: 0,
+            score,
+            hp_left: hp,
+            actions,
+        }
     }
 
     #[test]
-    fn worse_run_keeps_the_previous_best_but_still_counts() {
-        let existing = PlayerRecord { best_floor: 3, best_relics: 2, total_runs: 5 };
-        let (record, is_new_best) = apply_run(Some(existing), 1, 0);
-        assert_eq!(record, PlayerRecord { best_floor: 3, best_relics: 2, total_runs: 6 });
-        assert!(!is_new_best);
+    fn higher_score_beats_everything_else() {
+        let low = outcome(Ending::Extracted, 3, 1, 10, 10);
+        let high = outcome(Ending::Extracted, 1, 2, 1, 900);
+        assert!(rank_key(&high) > rank_key(&low));
     }
 
     #[test]
-    fn floor_reached_is_clamped_to_the_shipped_max() {
-        let (record, _) = apply_run(None, 99, 1);
-        assert_eq!(record.best_floor, MAX_FLOOR);
+    fn same_score_prefers_the_deeper_floor() {
+        let shallow = outcome(Ending::Extracted, 1, 1, 10, 10);
+        let deep = outcome(Ending::Extracted, 2, 1, 1, 900);
+        assert!(rank_key(&deep) > rank_key(&shallow));
     }
 
     #[test]
-    fn relics_alone_can_set_a_new_best() {
-        let existing = PlayerRecord { best_floor: 3, best_relics: 1, total_runs: 1 };
-        let (record, is_new_best) = apply_run(Some(existing), 2, 4);
-        assert_eq!(record, PlayerRecord { best_floor: 3, best_relics: 4, total_runs: 2 });
-        assert!(is_new_best);
+    fn same_floor_prefers_more_hp_then_fewer_actions() {
+        let hurt = outcome(Ending::Extracted, 3, 6, 2, 50);
+        let healthy = outcome(Ending::Extracted, 3, 6, 9, 200);
+        assert!(rank_key(&healthy) > rank_key(&hurt));
+        let slow = outcome(Ending::Extracted, 3, 6, 9, 300);
+        assert!(rank_key(&healthy) > rank_key(&slow));
+    }
+
+    #[test]
+    fn a_death_ranks_below_any_extraction() {
+        let dead_deep = outcome(Ending::Dead, 3, 0, 0, 10);
+        let extracted_shallow = outcome(Ending::Extracted, 1, 0, 1, 1000);
+        assert!(rank_key(&extracted_shallow) > rank_key(&dead_deep));
+    }
+
+    #[test]
+    fn first_run_becomes_the_best() {
+        let o = outcome(Ending::Extracted, 2, 3, 5, 80);
+        let (record, new_best) = apply_outcome(None, &o, rank_key(&o));
+        assert!(new_best);
+        assert_eq!(record.best_floor, 2);
+        assert_eq!(record.best_score, 3);
+        assert_eq!(record.total_runs, 1);
+        assert_eq!(record.extractions, 1);
+        assert_eq!(record.relics_banked, 1);
+    }
+
+    #[test]
+    fn a_worse_run_counts_but_keeps_the_best() {
+        let good = outcome(Ending::Extracted, 3, 6, 9, 100);
+        let (record, _) = apply_outcome(None, &good, rank_key(&good));
+        let bad = outcome(Ending::Dead, 1, 0, 0, 20);
+        let (record, new_best) = apply_outcome(Some(record), &bad, rank_key(&bad));
+        assert!(!new_best);
+        assert_eq!(record.best_floor, 3);
+        assert_eq!(record.total_runs, 2);
+        assert_eq!(record.deaths, 1);
+        assert_eq!(record.extractions, 1);
+    }
+
+    #[test]
+    fn a_death_never_banks_relics() {
+        let o = outcome(Ending::Dead, 2, 0, 0, 40);
+        let (record, _) = apply_outcome(None, &o, rank_key(&o));
+        assert_eq!(record.relics_banked, 0);
+        assert_eq!(record.best_score, 0);
     }
 }

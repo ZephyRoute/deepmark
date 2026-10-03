@@ -1,14 +1,4 @@
-import {
-  attack,
-  chooseDescend,
-  chooseExtract,
-  drainEvents,
-  newRun,
-  retreat,
-  tryMove,
-  type GameEvent,
-  type RunState,
-} from './game/state';
+import { ActionCode, applyAction, drainEvents, newRun, type GameEvent, type RunState } from './game/state';
 import { loadProgress, type Progress } from './game/progress';
 import { onAction, type Action } from './input/keyboard';
 import { drawWorld, face } from './render/canvas';
@@ -169,6 +159,13 @@ function handleEvent(event: GameEvent): void {
   }
 }
 
+const MOVE_CODES = {
+  up: ActionCode.Up,
+  down: ActionCode.Down,
+  left: ActionCode.Left,
+  right: ActionCode.Right,
+} as const;
+
 onAction((action) => {
   if (showStats) {
     if (action === 'stats' || action === 'cancel') showStats = false;
@@ -206,16 +203,16 @@ onAction((action) => {
   }
 
   if (run.mode === 'combat') {
-    if (action === 'confirm') attack(run);
-    if (action === 'cancel') retreat(run);
+    if (action === 'confirm') applyAction(run, ActionCode.Attack);
+    if (action === 'cancel') applyAction(run, ActionCode.Retreat);
   } else if (run.mode === 'choice') {
-    if (action === 'confirm') chooseDescend(run);
-    if (action === 'cancel') chooseExtract(run);
+    if (action === 'confirm') applyAction(run, ActionCode.Descend);
+    if (action === 'cancel') applyAction(run, ActionCode.Extract);
   } else {
     const dir = DIRS[action];
     if (dir) {
       if (dir[0] !== 0) face(dir[0] < 0 ? -1 : 1);
-      tryMove(run, dir[0], dir[1]);
+      applyAction(run, MOVE_CODES[action as keyof typeof MOVE_CODES]);
     }
   }
 

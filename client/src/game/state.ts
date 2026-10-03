@@ -6,6 +6,26 @@ import { recordRun } from './progress';
 import { mulberry32, freshSeed, type Rng } from './rng';
 
 export type Mode = 'title' | 'explore' | 'combat' | 'choice' | 'result';
+
+/**
+ * One byte per input, the exact encoding the contract replays. Changing a
+ * value here changes what the contract accepts, so it must match
+ * `contracts/deepmark-contract/src/sim.rs`.
+ */
+export const ActionCode = {
+  Up: 0,
+  Down: 1,
+  Left: 2,
+  Right: 3,
+  Attack: 4,
+  Retreat: 5,
+  Descend: 6,
+  Extract: 7,
+} as const;
+export type ActionCode = (typeof ActionCode)[keyof typeof ActionCode];
+
+/** Most actions one run may hold. Matches `MAX_ACTIONS` in the contract. */
+export const MAX_ACTIONS = 2048;
 export type ResultKind = 'extracted' | 'dead';
 
 export interface EnemyState {
@@ -49,6 +69,10 @@ export interface RunState {
   relicsThisRun: number;
   scoreThisRun: number;
   resultKind: ResultKind | null;
+  /** Every input that changed the game, in order. This is what the contract replays. */
+  actions: number[];
+  /** True when the run hit `MAX_ACTIONS` and can no longer be verified on chain. */
+  exhausted: boolean;
   newBest: boolean;
   log: string[];
   events: GameEvent[];
@@ -89,6 +113,8 @@ export function newRun(heroId: HeroId = 'lantern', seed: number = freshSeed()): 
     relicsThisRun: 0,
     scoreThisRun: 0,
     resultKind: null,
+    actions: [],
+    exhausted: false,
     newBest: false,
     log: [`${hero.name} enters the dungeon. Find the stairs, or find your death.`],
     events: [],
@@ -131,8 +157,8 @@ function finishRun(state: RunState, kind: ResultKind): void {
   pushEvent(state, kind === 'extracted' ? { type: 'extracted' } : { type: 'dead' });
 }
 
-export function tryMove(state: RunState, dx: number, dy: number): void {
-  if (state.mode !== 'explore') return;
+function tryMove(state: RunState, dx: number, dy: number): boolean {
+  if (state.mode !== 'explore') return false;
   const nx = state.player.x + dx;
   const ny = state.player.y + dy;
 
@@ -143,10 +169,10 @@ export function tryMove(state: RunState, dx: number, dy: number): void {
     const enemy = state.enemies[enemyIdx];
     if (enemy) pushLog(state, `${ENEMIES[enemy.kind].name} blocks the way.`);
     pushEvent(state, { type: 'combatStart' });
-    return;
+    return true;
   }
 
-  if (!isWalkable(state.layout, nx, ny)) return;
+  if (!isWalkable(state.layout, nx, ny)) return false;
 
   state.player.x = nx;
   state.player.y = ny;
@@ -170,12 +196,13 @@ export function tryMove(state: RunState, dx: number, dy: number): void {
       pushEvent(state, { type: 'floorCleared' });
     }
   }
+  return true;
 }
 
-export function attack(state: RunState): void {
-  if (state.mode !== 'combat' || state.activeEnemyIndex === null) return;
+function attack(state: RunState): boolean {
+  if (state.mode !== 'combat' || state.activeEnemyIndex === null) return false;
   const enemy = state.enemies[state.activeEnemyIndex];
-  if (!enemy) return;
+  if (!enemy) return false;
   const archetype = ENEMIES[enemy.kind];
   const hero = HEROES[state.heroId];
   const result = resolveExchange(
@@ -198,7 +225,7 @@ export function attack(state: RunState): void {
     state.activeEnemyIndex = null;
     pushLog(state, `The ${archetype.name} falls.`);
     pushEvent(state, { type: 'enemyDied', x: enemy.x, y: enemy.y });
-    return;
+    return true;
   }
 
   state.player.hp = Math.max(0, state.player.hp - result.enemyDamageDealt);
@@ -209,18 +236,20 @@ export function attack(state: RunState): void {
     pushLog(state, 'You collapse. Nothing extracted, nothing kept.');
     finishRun(state, 'dead');
   }
+  return true;
 }
 
-export function retreat(state: RunState): void {
-  if (state.mode !== 'combat') return;
+function retreat(state: RunState): boolean {
+  if (state.mode !== 'combat') return false;
   state.mode = 'explore';
   state.activeEnemyIndex = null;
   pushLog(state, 'You back away.');
+  return true;
 }
 
-export function chooseDescend(state: RunState): void {
-  if (state.mode !== 'choice') return;
-  if (state.floorNumber >= MAX_FLOOR) return;
+function chooseDescend(state: RunState): boolean {
+  if (state.mode !== 'choice') return false;
+  if (state.floorNumber >= MAX_FLOOR) return false;
   state.floorNumber += 1;
   const layout = buildFloor(state.floorNumber);
   const { enemies, relics } = fromLayout(layout);
@@ -232,10 +261,55 @@ export function chooseDescend(state: RunState): void {
   state.mode = 'explore';
   pushLog(state, `You descend to floor ${state.floorNumber}.`);
   pushEvent(state, { type: 'descended', floor: state.floorNumber });
+  return true;
 }
 
-export function chooseExtract(state: RunState): void {
-  if (state.mode !== 'choice') return;
+function chooseExtract(state: RunState): boolean {
+  if (state.mode !== 'choice') return false;
   pushLog(state, "You extract with what you've gathered.");
   finishRun(state, 'extracted');
+  return true;
+}
+
+/**
+ * The only way input changes a run. Applies one action and, when it had an
+ * effect, appends its code to `state.actions`. Inputs that do nothing (a bump
+ * into a wall, a key that is illegal in the current mode) are not recorded,
+ * which keeps the log short without changing what the contract replays.
+ */
+export function applyAction(state: RunState, code: ActionCode): boolean {
+  if (state.mode === 'result') return false;
+  if (state.actions.length >= MAX_ACTIONS) {
+    state.exhausted = true;
+    return false;
+  }
+  let applied = false;
+  switch (code) {
+    case ActionCode.Up:
+      applied = tryMove(state, 0, -1);
+      break;
+    case ActionCode.Down:
+      applied = tryMove(state, 0, 1);
+      break;
+    case ActionCode.Left:
+      applied = tryMove(state, -1, 0);
+      break;
+    case ActionCode.Right:
+      applied = tryMove(state, 1, 0);
+      break;
+    case ActionCode.Attack:
+      applied = attack(state);
+      break;
+    case ActionCode.Retreat:
+      applied = retreat(state);
+      break;
+    case ActionCode.Descend:
+      applied = chooseDescend(state);
+      break;
+    case ActionCode.Extract:
+      applied = chooseExtract(state);
+      break;
+  }
+  if (applied) state.actions.push(code);
+  return applied;
 }
