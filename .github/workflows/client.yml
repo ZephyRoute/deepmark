@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - client/**
+      - contracts/deepmark-contract/tests/golden.txt
       - .github/workflows/client.yml
   push:
     branches: [main]
     paths:
       - client/**
+      - contracts/deepmark-contract/tests/golden.txt
       - .github/workflows/client.yml
 
 permissions:
@@ -36,3 +38,8 @@ jobs:
       - name: Build
         working-directory: client
         run: bun run build
+      - name: Golden vectors are current
+        working-directory: client
+        run: |
+          bun run golden 2>/dev/null > /tmp/golden.txt
+          diff /tmp/golden.txt ../contracts/deepmark-contract/tests/golden.txt

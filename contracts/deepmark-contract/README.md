@@ -1,34 +1,56 @@
 # deepmark-contract
 
-Records the result of a finished Deepmark run and a leaderboard, on Stellar/Soroban.
+Verified runs and relic assets for Deepmark, on Stellar/Soroban. The contract replays every run itself and never trusts a claimed result.
 
-Scaffolded with `cougr new --template starter` (correct `Cargo.toml`, `wasm32v1-none` build, and test conventions out of the box). The generated spawn-and-move ECS demo underneath was replaced: Deepmark's actual need is one persistent record per player address, which does not fit Cougr's entity-component model, built for many anonymous game entities rather than one row per wallet. `cougr-core` was removed from `Cargo.toml` accordingly; nothing here depends on it. See `docs/architecture/onchain-boundary.md` in the main `deepmark` repo for the full reasoning, including why combat stays client-side instead of becoming a transaction per attack.
+Scaffolded with `cougr new --template starter` for the crate layout, `wasm32v1-none` build and test conventions. The generated entity-component demo was replaced: the data model is one record per player address, which does not fit an ECS built for many anonymous entities, so `cougr-core` is not a dependency. See `docs/architecture/onchain-boundary.md` in the main repo for the full reasoning.
 
 ## Public contract API
 
 | Function | Parameters | Returns | Description |
 | --- | --- | --- | --- |
-| `record_run` | `player: Address`, `floor_reached: u32`, `relics_kept: u32` | `Result<PlayerRecord, Error>` | Persist one run's result for `player`. Requires `player`'s own signature. `floor_reached` is clamped to the shipped max floor. |
-| `get_record` | `player: Address` | `Option<PlayerRecord>` | A player's best floor, best relics, and total runs, or `None`. |
-| `leaderboard` | — | `Vec<Address>` | Every address that has ever recorded a run, oldest first, capped at 500. |
+| `__constructor` | `relic_common`, `relic_rare`, `relic_core`: `Address` | none | Sets the three relic Stellar Asset Contracts once. No admin, no upgrade. |
+| `start_run` | `player: Address`, `hero: u32` | `Result<RunTicket, Error>` | Opens a run and issues its seed on chain. Starting while a run is open forfeits it. Cooldown between starts. Requires the player's signature. |
+| `finish_run` | `player: Address`, `actions: Bytes` | `Result<RunOutcome, Error>` | Replays the action log, derives the result, updates the profile and leaderboard, mints banked relics. Consumes the open run. Requires the player's signature. |
+| `verify_run` | `hero: u32`, `seed: u32`, `actions: Bytes` | `Result<RunOutcome, Error>` | Pure replay with no writes. Anyone can audit a run. |
+| `get_record` | `player: Address` | `Option<PlayerRecord>` | A player's profile. |
+| `get_open_run` | `player: Address` | `Option<RunTicket>` | The run a player has open. |
+| `top` | none | `Vec<TopEntry>` | The best 100 verified runs, best first, one per player. |
+| `player_count` | none | `u32` | Distinct players that ever opened a run. Not capped. |
+| `players` | `start: u32`, `limit: u32` | `Vec<PlayerSummary>` | Profiles in first-seen order, at most 50 per call. |
+| `relic_tokens` | none | `RelicTokens` | The three relic asset contracts. |
 
-`PlayerRecord { best_floor: u32, best_relics: u32, total_runs: u32 }`.
+Errors: `InvalidHero` 1, `RunNotStarted` 2, `TooManyActions` 3, `InvalidAction` 4, `RunIncomplete` 5, `TrailingActions` 6, `TooFast` 7, `StartCooldown` 8.
 
-## Architecture overview
+## Action encoding
+
+One byte per action: `0` up, `1` down, `2` left, `3` right, `4` attack, `5` retreat, `6` descend, `7` extract. At most 2048 per run. The log must end exactly on the action that finishes the run.
+
+## Layout
 
 ```
-lib.rs         contract entrypoints — require_auth, apply a pure rule, persist, emit an event
-  ├─ components.rs   PlayerRecord, DataKey, leaderboard cap, TTL constants
-  └─ systems.rs      apply_run() — pure record-update rule, no storage access, unit tested directly
+lib.rs          entrypoints: require_auth, replay, persist, mint, emit events
+  components.rs   data shapes and limits
+  rng.rs          Mulberry32, bit exact port of client/src/game/rng.ts
+  world.rs        delvers, enemies and the three floors
+  sim.rs          deterministic replay of a run, pure Rust, no Env
+  systems.rs      ranking key and profile update, pure Rust, no Env
+tests/golden.rs   replays 400 runs played by the real TypeScript game
 ```
 
-## Trust model (read this before assuming more than it provides)
+## Trust model
 
-This contract does **not** re-simulate a run to verify the claimed result. Deepmark's floor generation and combat resolution run entirely in the browser for instant feedback; `record_run` only persists what the client already computed. That is a deliberate trade-off for a 7-day hackathon window, not an oversight: putting every combat exchange on-chain would mean a multi-second wallet/network round trip per attack, which would make the game unplayable. What the chain genuinely provides here is that the result becomes the player's own, portable, tamper-evident-once-written record instead of a row in a database the developers could quietly edit, and `require_auth` means nobody can write a result under an address that is not theirs. Closing the remaining gap, verifying the claimed result actually happened, would mean moving combat resolution on-chain turn by turn (Cougr's `turn-based` and `hidden-info` templates exist for exactly that) and is a documented next step, not a claim made about the current build.
+- **Verified.** Floor, score, relics and HP are derived by the replay. A forged log fails or produces a legitimate run.
+- **Seed.** Issued on chain from ledger data, the player's run counter and address.
+- **Replay protection.** Finishing consumes the open run.
+- **Authorization.** Both writing entrypoints require the player's own signature.
+- **Relics.** Minted through Stellar Asset Contracts whose admin is this contract. The issuer account is locked after deployment, so nothing else can mint. A mint uses `try_mint`, so a player without a trustline never loses a verified result.
+- **No admin and no upgrade path.** There is nothing valuable to protect and a key would only add attack surface.
 
-## Storage model
+Not covered: seed rerolling is limited by a cooldown and a visible abandoned run counter, not eliminated, and a solver can still play a legal perfect run. There is no third party audit. Review that did happen: 50 unit and entrypoint tests, 400 cross-language vectors, a mutation check that the vectors catch RNG drift, and live testnet attempts to replay a log, forge a floor 3 run and restart too soon, all rejected.
 
-`Record(Address)` and `Leaderboard` are both **persistent** storage entries (per-key TTL, survives indefinitely if kept alive), not **instance** storage, because per-player data is unbounded in count and must not live in the single instance entry. Every write extends that key's TTL (30-day threshold, 120-day extend-to) so active players' state does not get archived between hackathon sessions.
+## Storage
+
+Persistent storage for profiles, the player index and the top list, each with its TTL extended on write. The open run lives in temporary storage and expires on its own after two days. The number of players is not capped because each player is an independent entry.
 
 ## Build and test
 
@@ -37,23 +59,4 @@ cargo test
 stellar contract build
 ```
 
-`stellar contract build` needs the WASM target and the Stellar CLI:
-
-```bash
-rustup target add wasm32v1-none
-cargo install --locked stellar-cli
-```
-
-The build writes `target/wasm32v1-none/release/deepmark_contract.wasm`, which is what you deploy with `stellar contract deploy`.
-
-## Known limitations
-
-- No re-simulation of the run; see "Trust model" above.
-- The leaderboard is an unsorted address list capped at 500 entries; the client sorts by reading each record. A round with more than 500 distinct players would need a different structure.
-- `floor_reached` and `relics_kept` are trusted inputs beyond the floor clamp; there is no check that `relics_kept` is plausible for the claimed floor.
-
-## Immutability and audit status
-
-There is no admin address, no upgrade function, and no pause switch anywhere in this contract. What is deployed is permanent: fixing a bug means deploying a new contract ID, not patching this one in place. That is an explicit choice, not an oversight, appropriate here because the contract holds no funds and has no admin surface to abuse in the first place; an upgrade or pause mechanism would only add an attack surface (a key that could rewrite the rules) without protecting anything of value.
-
-No third-party audit was done. The contract was not sent to formal or paid review before its first mainnet deployment. This is a deliberate, documented risk acceptance, not an omission: `record_run`, `get_record`, and `leaderboard` move no funds, mint no token, and hold no admin authority capable of harming a user; the entire blast radius of a bug here is a wrong number in a game record. That is a different risk class from a contract custodying value, where an audit would be non-negotiable before mainnet. Review that did happen: 10 automated tests (4 pure-logic, 6 through a sandboxed `Env`), a live testnet deployment exercised through `stellar contract invoke` and a real browser playthrough, and a manual pass against the checklist in the `deploy-stellar-mainnet` skill (auth paths, overflow handling, storage TTL, no `unwrap()` on user-controlled paths) before the mainnet deploy in the repo's commit history.
+`cargo test` also runs the golden vectors. Regenerate them after any change to the game simulation with `bun run golden > ../contracts/deepmark-contract/tests/golden.txt` in `client/`.

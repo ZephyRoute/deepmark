@@ -4,7 +4,9 @@ A turn-based dungeon-crawler roguelite on Stellar/Soroban. Descend, decide, bank
 
 Built for the Find Your Way Meridian Hackathon (Stellar Passport). This repository is private during development and will be published closer to the submission deadline; see `deepmark-internal` for the full design and schedule.
 
-Status: Phase 3, live on Stellar testnet. Every finished run records its result to a deployed Soroban contract (`contracts/deepmark-contract`, id `CDSY2SAMUJ43TWKN7IOGWXMOSYCD3BHHZZJY4YZHSSNRKHQPH5T3LQSH`), with a non-custodial browser keypair and no wallet prompts. See `docs/architecture/onchain-boundary.md` for exactly what is and is not verified on-chain.
+Status: live on Stellar testnet. The contract replays every run from its action log, so a result cannot be claimed without playing it, and a verified extraction mints relics as real Stellar assets (`DMCOMMON`, `DMRARE`, `DMCORE`). No wallet or extension is needed. See `docs/architecture/onchain-boundary.md` for exactly what is and is not verified on-chain.
+
+Contract (testnet): `CBOYTAF2YADTF2FKHKMJHQCZW7EXHBQLCMLBX6FHMOE2WOQH5T3VQCCW`
 
 ## Run it locally
 
@@ -16,9 +18,9 @@ bun install
 bun run dev
 ```
 
-`bun run typecheck` checks the TypeScript project. `bun run build` typechecks and writes the production bundle to `client/dist`.
+`bun run typecheck` checks the TypeScript project. `bun run golden` regenerates the vectors that tie the TypeScript game to the contract's Rust replay. `bun run build` typechecks and writes the production bundle to `client/dist`.
 
-WASD or arrow keys to move, Enter to confirm/attack/descend, Esc to retreat/extract. M opens your record: runs in this browser, and the best floor, relics, and run count stored for this address on Stellar testnet. `/stats` is the public traction page: every address that has recorded a run, the run totals, and the best floors, read from the testnet contract. On a narrow screen the board scales to the window and on-screen controls take over. A Stellar testnet account is created and funded automatically on first run; no wallet or extension needed.
+WASD or arrow keys to move, Enter to confirm/attack/descend, Esc to retreat/extract. M opens your record: runs in this browser, and your verified record and relic balances on Stellar testnet. `/stats` is the public traction page: every address with a finished run, run totals and best floors, read from the testnet contract. On a narrow screen the board scales to the window and on-screen controls take over. A Stellar testnet account is created and funded automatically on first run; no wallet or extension needed.
 
 ## Contract
 
@@ -28,7 +30,7 @@ cargo test
 stellar contract build
 ```
 
-Deployed to testnet as `deepmark` (see `stellar contract deploy` in the repo history for the exact command).
+Deployed to testnet with three relic Stellar Asset Contracts. The deployment script lives in the private `deepmark-internal` repository and is described in `contracts/deepmark-contract/README.md`.
 
 ## Checks
 
