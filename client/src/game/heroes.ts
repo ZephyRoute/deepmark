@@ -33,26 +33,3 @@ export const HEROES: Record<HeroId, Hero> = {
     art: 'cinder.png',
   },
 };
-
-const STORAGE_KEY = 'deepmark.hero';
-
-export function isHeroId(value: string | null): value is HeroId {
-  return value === 'lantern' || value === 'cinder';
-}
-
-export function loadHero(): HeroId {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return isHeroId(stored) ? stored : 'lantern';
-  } catch {
-    return 'lantern';
-  }
-}
-
-export function saveHero(id: HeroId): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, id);
-  } catch {
-    // A private window can refuse storage. The choice still lasts for this tab.
-  }
-}

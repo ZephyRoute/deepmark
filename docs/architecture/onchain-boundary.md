@@ -12,6 +12,10 @@ The rule that shapes everything below: **the contract never trusts a claimed res
 
 If Stellar is unreachable, the game falls back to a practice run that is labelled as not recorded. The game never depends on the chain being up.
 
+## Earned delvers
+
+Every descent starts by building a delver: name, emblem, cloak, a base, one weapon and one charm from predefined items. `start_run` validates all of it and fixes it in the run's ticket. Only a fresh delver that extracts from floor 3 in a verified replay becomes the player's own, as a token stored in the contract with the verified clear as its proof. Dying first loses the character. An owned delver can descend again as a veteran, gaining one hit point of rank per clear up to three, and veterans have their own leaderboard so they never compete with fresh delvers.
+
 ## On-chain (Soroban)
 
 Contract: `contracts/deepmark-contract`.
@@ -21,6 +25,7 @@ Contract: `contracts/deepmark-contract`.
 - **Profile.** Per address: best verified run, runs, extractions, deaths, abandoned runs, relics banked.
 - **Leaderboard.** One sorted list of the best 100 verified runs, read in a single call, ranked by extraction, score, floor, HP left, then fewest actions. The number of players is not capped, and players are listed through a paged call.
 - **Audit.** `verify_run(hero, seed, actions)` replays any run without writing anything, so anyone can check a result from the `run_started` event and the log.
+- **Delvers.** The contract is also the registry of earned delvers: `owner_of`, `heroes_of`, `hero`, `balance` and `transfer`. Mint happens only inside `finish_run`, after the replay.
 - **Relic assets.** Three classic assets (`DMCOMMON`, `DMRARE`, `DMCORE`), each wrapped by a Stellar Asset Contract. The game contract is the admin of each, and the issuer account is locked, so nothing can mint except a verified extraction.
 
 ## Off-chain (client)
@@ -32,7 +37,7 @@ Contract: `contracts/deepmark-contract`.
 
 ## What this provides
 
-- A result cannot be claimed without playing it: a forged log either fails the replay or produces a legitimate result.
+- A delver cannot be claimed without winning with it, and a result cannot be claimed without playing it: a forged log either fails the replay or produces a legitimate result.
 - A run cannot be claimed twice: finishing consumes the open run.
 - Nobody can act for an address that did not sign.
 - The client cannot choose a favourable seed.
@@ -43,6 +48,7 @@ Contract: `contracts/deepmark-contract`.
 - **Seed rerolling is limited, not eliminated.** Starting another run costs a transaction and a short cooldown, and an abandoned run is counted on the profile, but a determined player can still discard seeds.
 - **A solver can play a legal perfect run.** Any deterministic game allows it. The result is still a run the game could produce, and ties are broken by HP left and fewest actions.
 - **The keypair lives in the browser.** Clearing storage loses the identity and its records. A passkey smart account is the planned replacement.
+- **Delvers are not yet standard NFTs.** They live in the game contract with a compatible shape, and the exact standard is to be verified before any claim of wallet support.
 - **Testnet only** until a mainnet deployment is made.
 
 ## Costs measured

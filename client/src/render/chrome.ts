@@ -329,7 +329,7 @@ function heroCard(hero: Hero, view: ChromeView): HTMLElement {
   const portrait = el('img', 'vault-portrait');
   portrait.src = `/art/${HEROES[baseId].art}`;
   portrait.alt = '';
-  portrait.style.filter = cloakFilter(hero.look.cloak);
+  portrait.style.filter = cloakFilter(hero.look.cloak, hero.base);
   const copy = el('div', 'vault-copy');
   const title = el('p', 'vault-name');
   title.append(emblemIcon(hero.look.emblem, 'emblem emblem-small'), el('span', '', hero.look.name));
@@ -530,10 +530,8 @@ export function syncChrome(view: ChromeView): void {
     setText('hud-mode', view.practice ? 'Practice, not recorded' : '');
     const lastLine = view.run.log[view.run.log.length - 1] ?? '';
     setText('hud-log', lastLine);
-  } else if (view.showCreator) {
-    setText('floor-label', 'Forge');
-  } else if (view.showVault) {
-    setText('floor-label', 'Vault');
+  } else if (view.showCreator || view.showVault) {
+    setText('floor-label', '');
   } else if (view.showStats) {
     setText('floor-label', 'Record');
   } else if (view.showLeaderboard) {

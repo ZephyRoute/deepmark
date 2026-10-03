@@ -35,17 +35,20 @@ interface Cloak {
   name: string;
   /** A swatch close to the tint the portrait takes. */
   swatch: string;
-  /** CSS filter that recolours the delver art. */
-  filter: string;
+  /** Target hue in degrees, `null` keeps the original art, `'gray'` desaturates it. */
+  hue: number | 'gray' | null;
 }
 
+/** The dominant hue of each base's painted art, in degrees, so a tint lands on the same colour for both. */
+const BASE_HUES: readonly number[] = [190, 15];
+
 const CLOAKS: readonly Cloak[] = [
-  { name: 'Slate', swatch: '#5f7a8c', filter: 'none' },
-  { name: 'Ember', swatch: '#c2603a', filter: 'hue-rotate(150deg) saturate(1.25)' },
-  { name: 'Moss', swatch: '#6f9a55', filter: 'hue-rotate(260deg) saturate(1.15)' },
-  { name: 'Dusk', swatch: '#8a64c6', filter: 'hue-rotate(50deg) saturate(1.2)' },
-  { name: 'Brine', swatch: '#3d9aa8', filter: 'hue-rotate(320deg) saturate(1.1)' },
-  { name: 'Ash', swatch: '#8c8c88', filter: 'grayscale(0.85) brightness(1.05)' },
+  { name: 'Original', swatch: '#5f7a8c', hue: null },
+  { name: 'Ember', swatch: '#c2603a', hue: 18 },
+  { name: 'Moss', swatch: '#6f9a55', hue: 105 },
+  { name: 'Dusk', swatch: '#8a64c6', hue: 270 },
+  { name: 'Brine', swatch: '#3d9aa8', hue: 190 },
+  { name: 'Ash', swatch: '#8c8c88', hue: 'gray' },
 ];
 
 export function cloakCount(): number {
@@ -60,6 +63,12 @@ export function cloakSwatch(index: number): string {
   return CLOAKS[index]?.swatch ?? '#5f7a8c';
 }
 
-export function cloakFilter(index: number): string {
-  return CLOAKS[index]?.filter ?? 'none';
+/** A CSS filter that recolours a delver's art to the chosen cloak, whichever base it is. */
+export function cloakFilter(index: number, base: number): string {
+  const hue = CLOAKS[index]?.hue ?? null;
+  if (hue === null) return 'none';
+  if (hue === 'gray') return 'grayscale(0.85) brightness(1.05)';
+  const from = BASE_HUES[base] ?? 190;
+  const turn = (((hue - from) % 360) + 360) % 360;
+  return `hue-rotate(${turn}deg) saturate(1.2)`;
 }

@@ -6,7 +6,7 @@ export const STELLAR_CONFIG = {
   horizonUrl: 'https://horizon-testnet.stellar.org',
   friendbotUrl: 'https://friendbot.stellar.org',
   explorerUrl: 'https://stellar.expert/explorer/testnet',
-  contractId: 'CBOYTAF2YADTF2FKHKMJHQCZW7EXHBQLCMLBX6FHMOE2WOQH5T3VQCCW',
+  contractId: 'CDL7OO7MGCNMHZBF5QPJCMBLLY3ORR44TJ54ON44M25YUX6UZ7L46UZW',
 };
 
 export type RelicKind = 'common' | 'rare' | 'core';
@@ -17,12 +17,12 @@ export type RelicKind = 'common' | 'rare' | 'core';
  * so only a verified extraction can mint one.
  */
 export const RELIC_ASSETS: Record<RelicKind, { code: string; contractId: string }> = {
-  common: { code: 'DMCOMMON', contractId: 'CBDQJOTRLE4VFJK253NN362AOTHL4N2I2ASFQ3MJJPC7HW2MTP4Z464L' },
-  rare: { code: 'DMRARE', contractId: 'CD4IXDUY6AQX5BUR35WXDSRXZ52DGPWMRMMNWZX24POEJRFJNZBNS7MW' },
-  core: { code: 'DMCORE', contractId: 'CCQ3MHOF7O6LDTSHYTSM6OJ6NBRSVQNJHGFZE22PN3B7JZX2QQ5VZP4M' },
+  common: { code: 'DMCOMMON', contractId: 'CCLLVBSEXPARVM6MP5HAXOSM3FGTUR3NHZSSRFRPNJSO4KWAPTMDZS7B' },
+  rare: { code: 'DMRARE', contractId: 'CCMDNYSZMHBDV3XBSGSQ5QVSNCVYMAGGPF6SAK3QDARIBT246FFYOIBT' },
+  core: { code: 'DMCORE', contractId: 'CDIYYZSMMSDXTTA5OA2C2QUJGMJRX4UP2UBR3QCUV44GJZTJBIS4BPDR' },
 };
 
-export const RELIC_ISSUER = 'GCNNXQUEEOMU6K2I3MR7J3YVDWQSLSAPHX23BDMNPZHFJAJ4AUDYJBJ6';
+export const RELIC_ISSUER = 'GAH27KP7NDO7HSYGIUFT7O5ONGW7M6RKCXRXIHCTLWKBM2PNU6336YMP';
 
 /** Classic assets carry seven decimals. The contract mints whole relics. */
 export const RELIC_UNIT = 10_000_000n;

@@ -9,17 +9,30 @@ Scaffolded with `cougr new --template starter` for the crate layout, `wasm32v1-n
 | Function | Parameters | Returns | Description |
 | --- | --- | --- | --- |
 | `__constructor` | `relic_common`, `relic_rare`, `relic_core`: `Address` | none | Sets the three relic Stellar Asset Contracts once. No admin, no upgrade. |
-| `start_run` | `player: Address`, `hero: u32` | `Result<RunTicket, Error>` | Opens a run and issues its seed on chain. Starting while a run is open forfeits it. Cooldown between starts. Requires the player's signature. |
-| `finish_run` | `player: Address`, `actions: Bytes` | `Result<RunOutcome, Error>` | Replays the action log, derives the result, updates the profile and leaderboard, mints banked relics. Consumes the open run. Requires the player's signature. |
-| `verify_run` | `hero: u32`, `seed: u32`, `actions: Bytes` | `Result<RunOutcome, Error>` | Pure replay with no writes. Anyone can audit a run. |
+| `start_run` | `player: Address`, `choice: HeroChoice` | `Result<RunTicket, Error>` | Opens a run, issues its seed on chain and fixes the delver: `Fresh(look, base, weapon, charm)` or `Veteran(hero_id)` that the player owns. Starting while a run is open forfeits it. Cooldown between starts. Requires the player's signature. |
+| `finish_run` | `player: Address`, `actions: Bytes` | `Result<RunOutcome, Error>` | Replays the action log, derives the result, updates the profile and the right leaderboard, mints banked relics, and after a full clear earns the delver (fresh) or adds a victory (veteran). Consumes the open run. Requires the player's signature. |
+| `verify_run` | `base`, `weapon`, `charm`, `rank`, `seed`: `u32`, `actions: Bytes` | `Result<RunOutcome, Error>` | Pure replay with no writes. Anyone can audit a run. |
 | `get_record` | `player: Address` | `Option<PlayerRecord>` | A player's profile. |
 | `get_open_run` | `player: Address` | `Option<RunTicket>` | The run a player has open. |
-| `top` | none | `Vec<TopEntry>` | The best 100 verified runs, best first, one per player. |
+| `top_fresh` | none | `Vec<TopEntry>` | The best 100 verified runs by fresh delvers, best first, one per player. |
+| `top_veteran` | none | `Vec<TopEntry>` | The same for veterans. |
 | `player_count` | none | `u32` | Distinct players that ever opened a run. Not capped. |
 | `players` | `start: u32`, `limit: u32` | `Vec<PlayerSummary>` | Profiles in first-seen order, at most 50 per call. |
 | `relic_tokens` | none | `RelicTokens` | The three relic asset contracts. |
+| `hero` | `id: u32` | `Option<Hero>` | A delver: look, kit, victories, and the verified first clear that earned it. |
+| `owner_of` | `id: u32` | `Option<Address>` | Who owns a delver. |
+| `heroes_of` | `owner: Address` | `Vec<u32>` | Every delver an address owns, at most 64. |
+| `balance` | `owner: Address` | `u32` | How many delvers an address owns. |
+| `hero_count` | none | `u32` | How many delvers have ever been earned. |
+| `transfer` | `from`, `to: Address`, `id: u32` | `Result<(), Error>` | Give a delver away. Requires the owner's signature. |
 
-Errors: `InvalidHero` 1, `RunNotStarted` 2, `TooManyActions` 3, `InvalidAction` 4, `RunIncomplete` 5, `TrailingActions` 6, `TooFast` 7, `StartCooldown` 8.
+Errors: `InvalidHero` 1, `RunNotStarted` 2, `TooManyActions` 3, `InvalidAction` 4, `RunIncomplete` 5, `TrailingActions` 6, `TooFast` 7, `StartCooldown` 8, `InvalidName` 9, `HeroNotFound` 10, `NotHeroOwner` 11.
+
+## Delvers and ownership
+
+A delver is a base (Lantern or Cinder), one weapon, one charm, and a look (name, emblem, cloak). Weapons and charms only change hit points and the damage range, so the replay gains no new rules. `stats_for` in `world.rs` is mirrored by `statsFor` in `client/src/game/loadout.ts`, and the golden vectors cover random kits.
+
+A delver becomes the player's own only when a fresh delver extracts from floor 3 in a verified replay. The Hero record keeps the verified score, HP and move count of that clear. A veteran earns one point of rank (one extra hit point, up to three) per clear and competes on its own leaderboard. Transferring a delver is allowed; a run started with a veteran cannot be finished by anyone but the current owner.
 
 ## Action encoding
 
@@ -46,7 +59,7 @@ tests/golden.rs   replays 400 runs played by the real TypeScript game
 - **Relics.** Minted through Stellar Asset Contracts whose admin is this contract. The issuer account is locked after deployment, so nothing else can mint. A mint uses `try_mint`, so a player without a trustline never loses a verified result.
 - **No admin and no upgrade path.** There is nothing valuable to protect and a key would only add attack surface.
 
-Not covered: seed rerolling is limited by a cooldown and a visible abandoned run counter, not eliminated, and a solver can still play a legal perfect run. There is no third party audit. Review that did happen: 50 unit and entrypoint tests, 400 cross-language vectors, a mutation check that the vectors catch RNG drift, and live testnet attempts to replay a log, forge a floor 3 run and restart too soon, all rejected.
+Not covered: seed rerolling is limited by a cooldown and a visible abandoned run counter, not eliminated, and a solver can still play a legal perfect run. There is no third party audit. Review that did happen: 63 unit and entrypoint tests, 600 cross-language vectors with random kits, a mutation check that the vectors catch RNG drift, and live testnet attempts to replay a log, forge a floor 3 run and restart too soon, all rejected.
 
 ## Storage
 

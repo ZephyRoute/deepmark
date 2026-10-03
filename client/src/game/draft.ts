@@ -19,7 +19,8 @@ export function randomName(): string {
 }
 
 export function defaultDraft(): Draft {
-  return { look: { name: randomName(), emblem: 0, cloak: 0 }, base: 0, weapon: 0, charm: 2 };
+  // The kit that clears most often in the balance simulator, so a first descent is a fair one.
+  return { look: { name: randomName(), emblem: 0, cloak: 0 }, base: 1, weapon: 1, charm: 2 };
 }
 
 function inRange(value: unknown, count: number): value is number {

@@ -50,6 +50,18 @@ export function mountCreator(host: HTMLElement, initial: Draft, hooks: CreatorHo
     )
   );
 
+  // Preview
+  const preview = el('div', 'creator-preview');
+  const previewPortrait = el('img', 'creator-portrait');
+  previewPortrait.alt = '';
+  const previewCopy = el('div', 'creator-preview-copy');
+  const previewName = el('p', 'creator-preview-name');
+  const previewStats = el('p', 'creator-preview-stats');
+  previewCopy.append(previewName, previewStats);
+  const previewEmblem = el('span', 'creator-preview-emblem');
+  preview.append(previewPortrait, previewCopy, previewEmblem);
+  root.append(preview);
+
   // Name
   const nameField = el('label', 'field');
   nameField.append(el('span', 'field-label', 'Name'));
@@ -171,18 +183,6 @@ export function mountCreator(host: HTMLElement, initial: Draft, hooks: CreatorHo
   });
   root.append(weapons.group, charms.group);
 
-  // Preview
-  const preview = el('div', 'creator-preview');
-  const previewPortrait = el('img', 'creator-portrait');
-  previewPortrait.alt = '';
-  const previewCopy = el('div', 'creator-preview-copy');
-  const previewName = el('p', 'creator-preview-name');
-  const previewStats = el('p', 'creator-preview-stats');
-  previewCopy.append(previewName, previewStats);
-  const previewEmblem = el('span', 'creator-preview-emblem');
-  preview.append(previewPortrait, previewCopy, previewEmblem);
-  root.append(preview);
-
   const actions = el('div', 'title-actions');
   const begin = el('button', 'btn btn-primary', 'Begin descent');
   begin.type = 'submit';
@@ -217,7 +217,7 @@ export function mountCreator(host: HTMLElement, initial: Draft, hooks: CreatorHo
     const stats = statsFor(loadoutOf(draft));
     const heroId = HERO_ORDER[draft.base] ?? 'lantern';
     previewPortrait.src = `/art/${HEROES[heroId].art}`;
-    previewPortrait.style.filter = cloakFilter(draft.look.cloak);
+    previewPortrait.style.filter = cloakFilter(draft.look.cloak, draft.base);
     previewName.textContent = valid ? name : 'Unnamed delver';
     previewStats.textContent = `${stats.maxHp} HP  ·  strikes for ${stats.dmgMin} to ${stats.dmgMax}`;
     previewEmblem.replaceChildren(emblemIcon(draft.look.emblem, 'emblem emblem-large'));

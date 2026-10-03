@@ -551,3 +551,21 @@ body:has(#overlay:not([hidden])) .touch {
 
 .btn-mini { min-height: 32px; padding: 0 12px; font-size: 0.78rem; }
 .topbar { align-items: center; }
+
+/* The preview stays in view while choosing, and the action row stays reachable. */
+.creator-preview {
+  position: sticky;
+  top: -16px;
+  z-index: 2;
+  margin: 0 -4px;
+  backdrop-filter: blur(6px);
+  background: rgba(10, 12, 20, 0.92);
+}
+
+.creator .title-actions {
+  position: sticky;
+  bottom: -16px;
+  z-index: 2;
+  padding: 10px 0 2px;
+  background: linear-gradient(180deg, rgba(12, 16, 26, 0), rgba(12, 16, 26, 0.96) 35%);
+}

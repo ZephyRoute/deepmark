@@ -6,7 +6,9 @@ Built for the Find Your Way Meridian Hackathon (Stellar Passport). This reposito
 
 Status: live on Stellar testnet. The contract replays every run from its action log, so a result cannot be claimed without playing it, and a verified extraction mints relics as real Stellar assets (`DMCOMMON`, `DMRARE`, `DMCORE`). No wallet or extension is needed. See `docs/architecture/onchain-boundary.md` for exactly what is and is not verified on-chain.
 
-Contract (testnet): `CBOYTAF2YADTF2FKHKMJHQCZW7EXHBQLCMLBX6FHMOE2WOQH5T3VQCCW`
+Contract (testnet): `CDL7OO7MGCNMHZBF5QPJCMBLLY3ORR44TJ54ON44M25YUX6UZ7L46UZW`
+
+Forge a delver from predefined items, descend, and if you clear all three floors that exact delver becomes yours, as a verified token you can send down again as a veteran.
 
 ## Run it locally
 

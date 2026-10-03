@@ -299,7 +299,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
     : 1;
   if (ready(playerImage)) {
     // The cloak colour recolours the delver. Browsers without canvas filters just draw the base art.
-    ctx.filter = cloakFilter(run.look.cloak);
+    ctx.filter = cloakFilter(run.look.cloak, run.loadout.base);
     drawFooted(ctx, playerImage, player.cx + playerLunge, player.cy, ACTOR_SIZE.player, facing < 0, squat);
     ctx.filter = 'none';
   }
