@@ -131,7 +131,7 @@ body:has(#overlay:not([hidden])) .touch {
   padding: 22px 20px calc(18px + env(safe-area-inset-bottom));
   background:
     linear-gradient(180deg, rgba(7, 8, 14, 0.05) 10%, rgba(7, 8, 14, 0.82) 72%),
-    url("/art/title.jpg") center / cover no-repeat;
+    url("/art/title.webp") center / cover no-repeat;
 }
 
 .eyebrow, .panel-sub, .hint, .stats, .chain, .prompt-sub {
@@ -343,6 +343,33 @@ body:has(#overlay:not([hidden])) .touch {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.hud-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(244, 239, 230, 0.2);
+}
+
+.swatch-open {
+  background: #3d4c5c;
+  box-shadow: inset 0 0 0 2px rgba(126, 240, 224, 0.85);
+}
+
+.swatch-block {
+  background: #12141c;
+  box-shadow: inset 0 1px 0 rgba(244, 239, 230, 0.28), inset 0 -3px 0 #05060a;
 }
 
 .touch {
@@ -586,7 +613,7 @@ body:has(#overlay:not([hidden])) .touch {
 .descent-art {
   position: absolute;
   inset: -4%;
-  background: url("/art/title.jpg") 50% 58% / cover no-repeat;
+  background: url("/art/title.webp") 50% 58% / cover no-repeat;
   filter: saturate(0.92) brightness(0.82);
   transform-origin: 50% 60%;
   animation: descent-push 22s cubic-bezier(0.22, 0.6, 0.3, 1) both;
@@ -889,3 +916,7 @@ body:has(#overlay:not([hidden])) .touch {
 }
 
 .result [hidden] { display: none !important; }
+
+.pick-icon { width: 56px; height: 56px; object-fit: contain; flex: 0 0 auto; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5)); }
+.vault-icons { display: flex; gap: 6px; margin: 6px 0 2px; }
+.vault-icon { width: 30px; height: 30px; object-fit: contain; opacity: 0.9; }

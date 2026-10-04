@@ -3,6 +3,7 @@ import { cloakFilter } from './emblems';
 import type { HeroId } from '../game/heroes';
 import type { RelicKind } from '../game/floor';
 import type { RunState } from '../game/state';
+import { punchScale, tick } from './clock';
 import { drawLowHealth, drawParticles, drawPopups, getShakeOffset, isFlashing } from './effects';
 import { sampleActor, type Clip } from './motion';
 
@@ -34,35 +35,37 @@ function loadArt(file: string): HTMLImageElement {
 }
 
 const art = {
-  floor: loadArt('floor.jpg'),
-  floor2: loadArt('floor-2.jpg'),
-  floor3: loadArt('floor-3.jpg'),
-  wall: loadArt('wall.jpg'),
-  wall2: loadArt('wall-2.jpg'),
-  wall3: loadArt('wall-3.jpg'),
-  stairs: loadArt('stairs.jpg'),
-  stairs2: loadArt('stairs-2.jpg'),
-  stairs3: loadArt('stairs-3.jpg'),
-  player: loadArt('player.png'),
-  cinder: loadArt('cinder.png'),
-  playerWalkA: loadArt('player-walk-a.png'),
-  playerWalkB: loadArt('player-walk-b.png'),
-  playerAttack: loadArt('player-attack.png'),
-  warden: loadArt('warden.png'),
-  wardenWalk: loadArt('warden-walk.png'),
-  wardenAttack: loadArt('warden-attack.png'),
-  skitter: loadArt('skitter.png'),
-  skitterWalk: loadArt('skitter-walk.png'),
-  skitterAttack: loadArt('skitter-attack.png'),
-  adept: loadArt('adept.png'),
-  adeptWalk: loadArt('adept-walk.png'),
-  adeptAttack: loadArt('adept-attack.png'),
-  wardenPrime: loadArt('warden-prime.png'),
-  wardenPrimeWalk: loadArt('warden-prime-walk.png'),
-  wardenPrimeAttack: loadArt('warden-prime-attack.png'),
-  common: loadArt('relic-common.png'),
-  rare: loadArt('relic-rare.png'),
-  core: loadArt('relic-core.png'),
+  floor: loadArt('floor.webp'),
+  floor2: loadArt('floor-2.webp'),
+  floor3: loadArt('floor-3.webp'),
+  wall: loadArt('wall.webp'),
+  wall2: loadArt('wall-2.webp'),
+  wall3: loadArt('wall-3.webp'),
+  stairs: loadArt('stairs.webp'),
+  stairs2: loadArt('stairs-2.webp'),
+  stairs3: loadArt('stairs-3.webp'),
+  player: loadArt('player.webp'),
+  lanternVeteran: loadArt('delver-lantern-veteran.webp'),
+  cinderVeteran: loadArt('delver-cinder-veteran.webp'),
+  cinder: loadArt('cinder.webp'),
+  playerWalkA: loadArt('player-walk-a.webp'),
+  playerWalkB: loadArt('player-walk-b.webp'),
+  playerAttack: loadArt('player-attack.webp'),
+  warden: loadArt('warden.webp'),
+  wardenWalk: loadArt('warden-walk.webp'),
+  wardenAttack: loadArt('warden-attack.webp'),
+  skitter: loadArt('skitter.webp'),
+  skitterWalk: loadArt('skitter-walk.webp'),
+  skitterAttack: loadArt('skitter-attack.webp'),
+  adept: loadArt('adept.webp'),
+  adeptWalk: loadArt('adept-walk.webp'),
+  adeptAttack: loadArt('adept-attack.webp'),
+  wardenPrime: loadArt('warden-prime.webp'),
+  wardenPrimeWalk: loadArt('warden-prime-walk.webp'),
+  wardenPrimeAttack: loadArt('warden-prime-attack.webp'),
+  common: loadArt('relic-common.webp'),
+  rare: loadArt('relic-rare.webp'),
+  core: loadArt('relic-core.webp'),
 };
 
 function biome(floor: number): { floor: HTMLImageElement; wall: HTMLImageElement; stairs: HTMLImageElement } {
@@ -164,12 +167,16 @@ function blitCell(
   );
 }
 
-function playerFrames(heroId: HeroId): {
+function playerFrames(heroId: HeroId, veteran: boolean): {
   idle: HTMLImageElement;
   walkA: HTMLImageElement;
   walkB: HTMLImageElement;
   attack: HTMLImageElement;
 } {
+  if (veteran) {
+    const image = heroId === 'cinder' ? art.cinderVeteran : art.lanternVeteran;
+    return { idle: image, walkA: image, walkB: image, attack: image };
+  }
   if (heroId === 'cinder') {
     return { idle: art.cinder, walkA: art.cinder, walkB: art.cinder, attack: art.cinder };
   }
@@ -213,11 +220,162 @@ function drawCentered(
 }
 
 function fillFallback(ctx: CanvasRenderingContext2D, x: number, y: number, wall: boolean): void {
-  ctx.fillStyle = wall ? '#242938' : (x + y) % 2 === 0 ? '#1a1e29' : '#171b25';
+  ctx.fillStyle = wall ? '#10131c' : (x + y) % 2 === 0 ? '#3a4558' : '#323c4e';
   ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
 }
 
+/** A cell outside the grid counts as solid, so the room edge gets the same seam. */
+function solidAt(run: RunState, x: number, y: number): boolean {
+  return run.layout.grid[y]?.[x] !== 'floor';
+}
+
+function livingEnemyAt(run: RunState, x: number, y: number): boolean {
+  return run.enemies.some((enemy) => enemy.alive && enemy.x === x && enemy.y === y);
+}
+
+/**
+ * Walls and floors share one dark stone palette, so the crop of a cell
+ * does not say which is blocked. Crush the walls, lift the floor, and
+ * draw a cyan seam plus a cast shadow on every edge a step can meet.
+ */
+function paintBoard(ctx: CanvasRenderingContext2D, run: RunState, offsetX: number): void {
+  const theme = biome(run.floorNumber);
+  for (let y = 0; y < GRID_HEIGHT; y++) {
+    for (let x = 0; x < GRID_WIDTH; x++) {
+      const dx = offsetX + x * TILE_SIZE;
+      const dy = y * TILE_SIZE;
+      const wall = solidAt(run, x, y);
+      const texture = wall ? theme.wall : theme.floor;
+      if (ready(texture)) blitCell(ctx, texture, x, y, dx, dy);
+      else fillFallback(ctx, dx, dy, wall);
+
+      if (wall) {
+        ctx.fillStyle = 'rgba(4, 5, 10, 0.62)';
+        ctx.fillRect(dx, dy, TILE_SIZE, TILE_SIZE);
+        ctx.fillStyle = 'rgba(244, 239, 230, 0.14)';
+        ctx.fillRect(dx, dy, TILE_SIZE, 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.fillRect(dx, dy + TILE_SIZE - 4, TILE_SIZE, 4);
+      } else {
+        ctx.fillStyle = 'rgba(196, 214, 224, 0.11)';
+        ctx.fillRect(dx, dy, TILE_SIZE, TILE_SIZE);
+      }
+    }
+  }
+
+  for (let y = 0; y < GRID_HEIGHT; y++) {
+    for (let x = 0; x < GRID_WIDTH; x++) {
+      if (solidAt(run, x, y)) continue;
+      const dx = offsetX + x * TILE_SIZE;
+      const dy = y * TILE_SIZE;
+      shadeOpenEdge(ctx, dx, dy, 'n', solidAt(run, x, y - 1));
+      shadeOpenEdge(ctx, dx, dy, 's', solidAt(run, x, y + 1));
+      shadeOpenEdge(ctx, dx, dy, 'w', solidAt(run, x - 1, y));
+      shadeOpenEdge(ctx, dx, dy, 'e', solidAt(run, x + 1, y));
+    }
+  }
+}
+
+function shadeOpenEdge(
+  ctx: CanvasRenderingContext2D,
+  dx: number,
+  dy: number,
+  side: 'n' | 's' | 'e' | 'w',
+  blocked: boolean
+): void {
+  if (!blocked) return;
+  const depth = 16;
+  let gradient: CanvasGradient;
+  let sx = dx;
+  let sy = dy;
+  let sw = TILE_SIZE;
+  let sh = depth;
+  if (side === 'n') {
+    gradient = ctx.createLinearGradient(0, dy, 0, dy + depth);
+  } else if (side === 's') {
+    gradient = ctx.createLinearGradient(0, dy + TILE_SIZE, 0, dy + TILE_SIZE - depth);
+    sy = dy + TILE_SIZE - depth;
+  } else if (side === 'w') {
+    gradient = ctx.createLinearGradient(dx, 0, dx + depth, 0);
+    sw = depth;
+    sh = TILE_SIZE;
+  } else {
+    gradient = ctx.createLinearGradient(dx + TILE_SIZE, 0, dx + TILE_SIZE - depth, 0);
+    sx = dx + TILE_SIZE - depth;
+    sw = depth;
+    sh = TILE_SIZE;
+  }
+  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.62)');
+  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(sx, sy, sw, sh);
+
+  ctx.fillStyle = 'rgba(126, 240, 224, 0.78)';
+  if (side === 'n') ctx.fillRect(dx, dy, TILE_SIZE, 2);
+  else if (side === 's') ctx.fillRect(dx, dy + TILE_SIZE - 2, TILE_SIZE, 2);
+  else if (side === 'w') ctx.fillRect(dx, dy, 2, TILE_SIZE);
+  else ctx.fillRect(dx + TILE_SIZE - 2, dy, 2, TILE_SIZE);
+}
+
+/** A quiet mark on each legal step, and a danger frame on a foe in reach. */
+function paintReach(ctx: CanvasRenderingContext2D, run: RunState, offsetX: number): void {
+  if (run.mode !== 'explore') return;
+  const steps: ReadonlyArray<readonly [number, number]> = [
+    [0, -1],
+    [0, 1],
+    [-1, 0],
+    [1, 0],
+  ];
+  for (const [dx, dy] of steps) {
+    const x = run.player.x + dx;
+    const y = run.player.y + dy;
+    const left = offsetX + x * TILE_SIZE;
+    const top = y * TILE_SIZE;
+    if (livingEnemyAt(run, x, y)) {
+      ctx.strokeStyle = 'rgba(255, 107, 90, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(left + 5, top + 5, TILE_SIZE - 10, TILE_SIZE - 10);
+      continue;
+    }
+    if (solidAt(run, x, y)) continue;
+    const cx = left + TILE_SIZE / 2;
+    const cy = top + TILE_SIZE / 2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = 'rgba(126, 240, 224, 0.72)';
+    ctx.fillRect(-4, -4, 8, 8);
+    ctx.restore();
+  }
+}
+
+function paintExit(ctx: CanvasRenderingContext2D, dx: number, dy: number): void {
+  const inset = 5;
+  const arm = 12;
+  ctx.strokeStyle = 'rgba(231, 195, 106, 0.92)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  const x0 = dx + inset;
+  const y0 = dy + inset;
+  const x1 = dx + TILE_SIZE - inset;
+  const y1 = dy + TILE_SIZE - inset;
+  ctx.moveTo(x0, y0 + arm);
+  ctx.lineTo(x0, y0);
+  ctx.lineTo(x0 + arm, y0);
+  ctx.moveTo(x1 - arm, y0);
+  ctx.lineTo(x1, y0);
+  ctx.lineTo(x1, y0 + arm);
+  ctx.moveTo(x0, y1 - arm);
+  ctx.lineTo(x0, y1);
+  ctx.lineTo(x0 + arm, y1);
+  ctx.moveTo(x1 - arm, y1);
+  ctx.lineTo(x1, y1);
+  ctx.lineTo(x1, y1 - arm);
+  ctx.stroke();
+}
+
 export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
+  tick();
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
   ctx.fillStyle = COLOR_BG;
@@ -228,20 +386,14 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
   const t = performance.now() / 1000;
 
   ctx.save();
-  ctx.translate(shakeX, shakeY);
+  const zoom = punchScale();
+  ctx.translate(w / 2 + shakeX, h / 2 + shakeY);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-w / 2, -h / 2);
 
   const theme = biome(run.floorNumber);
-  for (let y = 0; y < GRID_HEIGHT; y++) {
-    for (let x = 0; x < GRID_WIDTH; x++) {
-      const tile = run.layout.grid[y]?.[x];
-      const dx = offsetX + x * TILE_SIZE;
-      const dy = y * TILE_SIZE;
-      const wall = tile === 'wall';
-      const texture = wall ? theme.wall : theme.floor;
-      if (ready(texture)) blitCell(ctx, texture, x, y, dx, dy);
-      else fillFallback(ctx, dx, dy, wall);
-    }
-  }
+  paintBoard(ctx, run, offsetX);
+  paintReach(ctx, run, offsetX);
 
   const cell = (x: number, y: number) => ({
     cx: offsetX + x * TILE_SIZE + TILE_SIZE / 2,
@@ -257,6 +409,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
     const sx = (image.width - crop) / 2;
     const sy = (image.height - crop) / 2;
     ctx.drawImage(image, sx, sy, crop, crop, stairs.dx, stairs.dy, TILE_SIZE, TILE_SIZE);
+    paintExit(ctx, stairs.dx, stairs.dy);
   } else {
     ctx.fillStyle = '#66bb6a';
     ctx.fillRect(stairs.cx - 18, stairs.cy - 18, 36, 36);
@@ -287,7 +440,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
 
   const playerPose = sampleActor('player', run.player.x, run.player.y);
   const player = cell(playerPose.x, playerPose.y);
-  const sheet = playerFrames(run.heroId);
+  const sheet = playerFrames(run.heroId, run.loadout.rank > 0);
   const playerImage = pickFrame(
     sheet.idle,
     sheet.walkA,
