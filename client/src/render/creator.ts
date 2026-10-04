@@ -160,11 +160,16 @@ export function mountCreator(host: HTMLElement, initial: Draft, hooks: CreatorHo
     for (const item of items) {
       const b = el('button', 'pick pick-item');
       b.type = 'button';
+      const icon = el('img', 'pick-icon');
+      icon.src = `/art/${item.icon}`;
+      icon.alt = '';
+      icon.width = 56;
+      icon.height = 56;
       const copy = el('span', 'pick-copy');
       copy.append(el('span', 'pick-name', item.name));
       copy.append(el('span', 'pick-blurb', item.blurb));
       copy.append(el('span', 'pick-delta', deltaText(item)));
-      b.append(copy);
+      b.append(icon, copy);
       b.addEventListener('click', () => {
         pick(item.id);
         refresh();

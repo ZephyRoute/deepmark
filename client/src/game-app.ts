@@ -10,9 +10,9 @@ import {
   type LeaderboardRow,
   type OnchainSnapshot,
 } from './render/chrome';
-import './styles.css';
 import { flashActor, spawnBurst, spawnPopup, triggerShake } from './render/effects';
 import { showBanner } from './render/banner';
+import { hitStop, punch } from './render/clock';
 import type { VerifyState } from './render/result';
 import {
   sfxDead,
@@ -42,24 +42,9 @@ import { CHARMS, WEAPONS } from './game/items';
 import { cloakFilter } from './render/emblems';
 import type { DescentOptions, DescentStage } from './render/descent';
 import { rankForClears, type Loadout, type Look } from './game/loadout';
-import { getPlayerKeypair } from './stellar/account';
-import {
-  CONTRACT_ERROR,
-  fetchHeroes,
-  fetchRecord,
-  fetchTopFresh,
-  fetchTopVeteran,
-  finishRun,
-  freshChoice,
-  isContractError,
-  startRun,
-  veteranChoice,
-  type FinishedRun,
-  type Hero,
-  type HeroChoice,
-  type PlayerRecord,
-  type TopEntry,
-} from './stellar/contract';
+import { chain, warmChain } from './stellar/lazy';
+import { CONTRACT_ERROR, freshChoice, isContractError, veteranChoice } from './stellar/choice';
+import type { FinishedRun, Hero, HeroChoice, PlayerRecord, TopEntry } from './stellar/contract';
 import { fetchRelicBalances, type RelicBalances } from './stellar/relics';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -145,9 +130,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 async function refreshOnchain(): Promise<void> {
   try {
-    const keypair = await getPlayerKeypair();
+    const api = await chain();
+    const keypair = await api.getPlayerKeypair();
     playerAddress = keypair.publicKey();
-    const [record, balances] = await Promise.all([fetchRecord(playerAddress), fetchRelicBalances(playerAddress)]);
+    const [record, balances] = await Promise.all([api.fetchRecord(playerAddress), fetchRelicBalances(playerAddress)]);
     onchainRecord = record;
     relicBalances = balances;
     chainRead = 'ready';
@@ -157,7 +143,8 @@ async function refreshOnchain(): Promise<void> {
   }
 }
 
-void refreshOnchain();
+// Load the Stellar chunk when idle, then read the player's record. The title never waits for either.
+warmChain(() => void refreshOnchain());
 
 function onchainSnapshot(): OnchainSnapshot | null {
   if (!onchainRecord) return null;
@@ -189,7 +176,8 @@ async function loadBoard(): Promise<void> {
   leaderboardLoading = true;
   leaderboardRows = null;
   try {
-    const entries = tab === 'veteran' ? await fetchTopVeteran() : await fetchTopFresh();
+    const api = await chain();
+    const entries = tab === 'veteran' ? await api.fetchTopVeteran() : await api.fetchTopFresh();
     if (tab === boardTab) leaderboardRows = toRows(entries);
   } catch (err) {
     console.warn('Deepmark: could not load the leaderboard', err);
@@ -210,8 +198,9 @@ async function openVault(): Promise<void> {
   if (vaultHeroes || vaultLoading) return;
   vaultLoading = true;
   try {
-    const keypair = await getPlayerKeypair();
-    vaultHeroes = await fetchHeroes(keypair.publicKey());
+    const api = await chain();
+    const keypair = await api.getPlayerKeypair();
+    vaultHeroes = await api.fetchHeroes(keypair.publicKey());
   } catch (err) {
     console.warn('Deepmark: could not read the vault', err);
     vaultHeroes = null;
@@ -253,7 +242,7 @@ async function beginRun(plan: DelverPlan): Promise<void> {
   const openedAt = performance.now();
   const heroId = HERO_ORDER[plan.loadout.base] ?? 'lantern';
   descent = {
-    art: HEROES[heroId].art,
+    art: plan.loadout.rank > 0 ? HEROES[heroId].veteranArt : HEROES[heroId].art,
     filter: cloakFilter(plan.look.cloak, plan.loadout.base),
     name: plan.look.name,
     emblem: plan.look.emblem,
@@ -272,11 +261,12 @@ async function beginRun(plan: DelverPlan): Promise<void> {
   try {
     const ticket = await withTimeout(
       enqueue(async () => {
-        const keypair = await getPlayerKeypair();
+        const api = await chain();
+        const keypair = await api.getPlayerKeypair();
         startStage = 'opening';
         for (let attempt = 0; ; attempt += 1) {
           try {
-            return await startRun(keypair, plan.choice);
+            return await api.startRun(keypair, plan.choice);
           } catch (err) {
             const cooling = isContractError(err, CONTRACT_ERROR.StartCooldown);
             if (!cooling || attempt >= START_RETRIES) throw err;
@@ -342,7 +332,10 @@ function describeFailure(err: unknown): string {
 async function submitLog(finished: RunState): Promise<FinishedRun> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await enqueue(async () => finishRun(await getPlayerKeypair(), finished.actions));
+      return await enqueue(async () => {
+        const api = await chain();
+        return api.finishRun(await api.getPlayerKeypair(), finished.actions);
+      });
     } catch (err) {
       if (isPermanentFailure(err) || attempt >= VERIFY_ATTEMPTS - 1) throw err;
       chainStatus = 'Waiting for Stellar to settle this run...';
@@ -389,7 +382,8 @@ async function verifyOnChain(finished: RunState): Promise<void> {
   // failure here must never turn a confirmed transaction into an error.
   try {
     await refreshOnchain();
-    const top = runWasVeteran ? await fetchTopVeteran() : await fetchTopFresh();
+    const api = await chain();
+    const top = runWasVeteran ? await api.fetchTopVeteran() : await api.fetchTopFresh();
     const position = top.findIndex((entry) => entry.player === playerAddress);
     chainRank = position >= 0 ? position + 1 : null;
     leaderboardRows = null;
@@ -427,6 +421,8 @@ function handleEvent(event: GameEvent): void {
       spawnPopup(event.x, event.y, `-${event.amount}`, '#e5e7eb');
       spawnBurst(event.x, event.y, 'hit');
       sfxHitEnemy();
+      hitStop(event.amount >= 5 ? 90 : 55);
+      punch(Math.min(1, 0.25 + event.amount * 0.1));
       triggerShake(100 + event.amount * 12, 3 + event.amount);
       break;
     }
@@ -439,10 +435,14 @@ function handleEvent(event: GameEvent): void {
       flashActor('player');
       spawnBurst(event.x, event.y, 'hit');
       sfxHitPlayer();
+      hitStop(80);
+      punch(0.5 + Math.min(0.5, event.amount * 0.1));
       triggerShake(150 + event.amount * 15, 5 + event.amount * 1.5);
       break;
     case 'enemyDied':
       spawnBurst(event.x, event.y, 'kill');
+      hitStop(120);
+      punch(0.8);
       sfxEnemyDied();
       triggerShake(120, 5);
       break;

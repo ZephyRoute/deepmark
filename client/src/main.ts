@@ -4,7 +4,7 @@ function isPublicStatsPath(path: string): boolean {
 
 // Design preview of the descent scene, available on a local machine only:
 // http://localhost:5173/?preview=descent
-const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const isLocal = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname);
 const previewMode = isLocal ? new URLSearchParams(window.location.search).get('preview') : null;
 const previewDescent = previewMode === 'descent';
 const previewResult = previewMode === 'result';

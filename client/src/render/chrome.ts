@@ -12,6 +12,7 @@ import { mountCreator, type CreatorHooks } from './creator';
 import { cloakFilter, emblemIcon } from './emblems';
 import { mountResult, updateVerification, type ResultSummary, type Verification, type VerifyState } from './result';
 import { mountDescent, setDescentStage, type DescentOptions, type DescentStage } from './descent';
+import { mountTitle, updateTitle, type TitleInfo } from './title';
 import type { RelicBalances } from '../stellar/relics';
 
 export interface LeaderboardRow {
@@ -71,7 +72,6 @@ export interface ChromeView {
 }
 
 const TX_HASH = /^[a-f0-9]{64}$/;
-const WAITING_TEXT = 'Lowering the lantern. Your run is being opened on Stellar.';
 
 function relicSummary(relics: RelicBalances | null): string {
   if (!relics) return '';
@@ -141,7 +141,10 @@ function renderOverlay(view: ChromeView): void {
   if (!overlay) return;
 
   const key = overlaySignature(view);
-  if (key === overlayKey) return;
+  if (key === overlayKey) {
+    if (key === 'title') updateTitle(titleInfo(view));
+    return;
+  }
   overlayKey = key;
   overlay.replaceChildren();
 
@@ -177,7 +180,9 @@ function renderOverlay(view: ChromeView): void {
 
   if (!view.run) {
     overlay.hidden = false;
-    overlay.append(titleCard(view));
+    const info = titleInfo(view);
+    if (overlay.querySelector('.title-v2')) updateTitle(info);
+    else mountTitle(overlay, info);
     return;
   }
 
@@ -221,11 +226,7 @@ function overlaySignature(view: ChromeView): string {
     const vault = view.relics ? `${view.relics.common}:${view.relics.rare}:${view.relics.core}` : '';
     return `stats:${view.chainRead}:${chain}:${vault}:${view.playerAddress}:${progress.runsPlayed}:${progress.extractions}:${progress.deaths}:${progress.bestFloor}:${progress.bestRelics}:${progress.bestScore}:${progress.relicsKept}:${progress.lanternRuns}:${progress.cinderRuns}`;
   }
-  if (!view.run) {
-    const chain = view.onchain ? `${view.onchain.bestScore}:${view.onchain.bestFloor}:${view.onchain.runs}` : '';
-    const vault = view.relics ? `${view.relics.common}:${view.relics.rare}:${view.relics.core}` : '';
-    return `title:${view.starting}:${view.progress.runsPlayed}:${view.progress.bestFloor}:${view.progress.bestRelics}:${chain}:${vault}`;
-  }
+  if (!view.run) return 'title';
   if (view.run.mode === 'result') {
     // The ceremony owns its DOM and is updated in place, so it keeps one signature per run.
     return `result:${view.runId}`;
@@ -240,50 +241,16 @@ function overlaySignature(view: ChromeView): string {
   return 'play';
 }
 
-function titleCard(view: ChromeView): HTMLElement {
-  const card = el('div', 'title-screen');
-  card.append(el('p', 'eyebrow', 'Stellar testnet'));
-  card.append(el('h1', 'title', 'Deepmark'));
-  card.append(el('p', 'tagline', 'Leave a mark in the depths, or lose it on the way out.'));
-  const actions = el('div', 'title-actions');
-  const descend = button(view.starting ? 'Descending...' : 'Forge a delver', 'confirm', 'btn btn-primary');
-  descend.disabled = view.starting;
-  actions.append(descend);
-  actions.append(button('Vault', 'vault', 'btn'));
-  actions.append(button('Leaderboard', 'leaderboard', 'btn'));
-  actions.append(button('Stats', 'stats', 'btn'));
-  card.append(actions);
-  if (view.starting) {
-    const waiting = el('p', 'chain', WAITING_TEXT);
-    waiting.setAttribute('role', 'status');
-    card.append(waiting);
-  }
-
-  if (view.progress.runsPlayed > 0) {
-    card.append(
-      el(
-        'p',
-        'stats',
-        `Best floor ${view.progress.bestFloor} / ${MAX_FLOOR}  ·  Best relics ${view.progress.bestRelics}  ·  Runs ${view.progress.runsPlayed}`
-      )
-    );
-  }
-  if (view.onchain && view.onchain.runs > 0) {
-    card.append(
-      el(
-        'p',
-        'chain',
-        `Verified on Stellar: best score ${view.onchain.bestScore}, floor ${view.onchain.bestFloor} / ${MAX_FLOOR}, ${view.onchain.runs} runs`
-      )
-    );
-  }
-  const vault = relicSummary(view.relics);
-  if (vault) card.append(el('p', 'chain', `Relics in your vault: ${vault}`));
-  card.append(el('p', 'hint', 'Enter forges a delver. V opens your vault. L the leaderboard. M your record. WASD moves. Esc retreats or extracts.'));
-  const network = el('a', 'quiet-link', 'All players');
-  network.href = '/stats';
-  card.append(network);
-  return card;
+function titleInfo(view: ChromeView): TitleInfo {
+  const progress = view.progress;
+  const local = progress.runsPlayed > 0
+    ? `Best floor ${progress.bestFloor} / ${MAX_FLOOR}  ·  Best relics ${progress.bestRelics}  ·  Runs ${progress.runsPlayed}`
+    : '';
+  const chain = view.onchain && view.onchain.runs > 0
+    ? `Verified on Stellar: best score ${view.onchain.bestScore}, floor ${view.onchain.bestFloor} / ${MAX_FLOOR}, ${view.onchain.runs} runs`
+    : '';
+  const held = relicSummary(view.relics);
+  return { local, chain, vault: held ? `Relics in your vault: ${held}` : '' };
 }
 
 function leaderboardCard(view: ChromeView): HTMLElement {
@@ -367,17 +334,26 @@ function heroCard(hero: Hero, view: ChromeView): HTMLElement {
   const item = el('article', 'vault-card');
   const baseId = HERO_ORDER[hero.base] ?? 'lantern';
   const portrait = el('img', 'vault-portrait');
-  portrait.src = `/art/${HEROES[baseId].art}`;
+  portrait.src = `/art/${HEROES[baseId].veteranArt}`;
   portrait.alt = '';
   portrait.style.filter = cloakFilter(hero.look.cloak, hero.base);
   const copy = el('div', 'vault-copy');
   const title = el('p', 'vault-name');
   title.append(emblemIcon(hero.look.emblem, 'emblem emblem-small'), el('span', '', hero.look.name));
   const kit = `${HEROES[baseId].name}  ·  ${WEAPONS[hero.weapon]?.name ?? '?'}  ·  ${CHARMS[hero.charm]?.name ?? '?'}`;
+  const icons = el('span', 'vault-icons');
+  for (const file of [WEAPONS[hero.weapon]?.icon, CHARMS[hero.charm]?.icon]) {
+    if (!file) continue;
+    const icon = el('img', 'vault-icon');
+    icon.src = `/art/${file}`;
+    icon.alt = '';
+    icons.append(icon);
+  }
   const rank = Math.min(hero.clears, MAX_RANK);
   copy.append(
     title,
     el('p', 'vault-kit', kit),
+    icons,
     el('p', 'vault-meta', `Veteran rank ${rank}  ·  ${hero.clears} ${hero.clears === 1 ? 'clear' : 'clears'}`),
     el('p', 'vault-meta', `First clear: score ${hero.proof_score}, ${hero.proof_hp_left} HP left, ${hero.proof_actions} moves`)
   );
@@ -528,7 +504,7 @@ function resultSummary(view: ChromeView): ResultSummary {
     bestLine: `Best floor ${view.progress.bestFloor} / ${MAX_FLOOR}  ·  Best relics ${view.progress.bestRelics}`,
     delver: {
       name: run.look.name,
-      art: HEROES[heroId].art,
+      art: HEROES[heroId].veteranArt,
       filter: cloakFilter(run.look.cloak, run.loadout.base),
       emblem: run.look.emblem,
     },
@@ -563,7 +539,8 @@ export function syncChrome(view: ChromeView): void {
 
   if (playing && view.run) {
     const floorName = ['', 'Reliquary', 'Drowned chapel', 'Obsidian crypt'][view.run.floorNumber] ?? '';
-    setText('floor-label', `Floor ${view.run.floorNumber} / ${MAX_FLOOR}  ${floorName}`);
+    const practice = view.practice ? '  ·  Practice' : '';
+    setText('floor-label', `Floor ${view.run.floorNumber} / ${MAX_FLOOR}  ${floorName}${practice}`);
     setText('hud-name', view.run.look.name);
     paintHp(view.run.player.hp, view.run.player.maxHp);
     setBumpText('hud-relics', `Relics ${view.run.relicsThisRun}`);
