@@ -1,7 +1,5 @@
-import { Networks } from '@stellar/stellar-sdk';
-
 export const STELLAR_CONFIG = {
-  networkPassphrase: Networks.TESTNET,
+  networkPassphrase: 'Test SDF Network ; September 2015',
   rpcUrl: 'https://soroban-testnet.stellar.org',
   horizonUrl: 'https://horizon-testnet.stellar.org',
   friendbotUrl: 'https://friendbot.stellar.org',

@@ -11,6 +11,8 @@ export interface Hero {
   dmgMin: number;
   dmgMax: number;
   art: string;
+  /** The seasoned look an owned delver takes on. */
+  veteranArt: string;
 }
 
 export const HEROES: Record<HeroId, Hero> = {
@@ -21,7 +23,8 @@ export const HEROES: Record<HeroId, Hero> = {
     maxHp: 10,
     dmgMin: 2,
     dmgMax: 5,
-    art: 'player.png',
+    art: 'player.webp',
+    veteranArt: 'delver-lantern-veteran.webp',
   },
   cinder: {
     id: 'cinder',
@@ -30,6 +33,7 @@ export const HEROES: Record<HeroId, Hero> = {
     maxHp: 9,
     dmgMin: 3,
     dmgMax: 5,
-    art: 'cinder.png',
+    art: 'cinder.webp',
+    veteranArt: 'delver-cinder-veteran.webp',
   },
 };

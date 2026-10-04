@@ -12,7 +12,7 @@ const COLOR_HPBACK = '#1c2230';
 const COLOR_HP = '#7dffb3';
 const COLOR_HP_LOW = '#ff6b5a';
 
-const RELIC_SIZE: Record<RelicKind, number> = { common: 34, rare: 42, core: 52 };
+const RELIC_SIZE: Record<RelicKind, number> = { common: 34, rare: 42, core: 60 };
 const ACTOR_SIZE = {
   player: 74,
   warden: 78,
@@ -420,7 +420,17 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
     const { cx, cy } = cell(relic.x, relic.y);
     const bob = Math.sin(t * 2.4 + cx * 0.05) * 3;
     const image = art[relic.kind];
-    if (ready(image)) drawCentered(ctx, image, cx, cy + bob, RELIC_SIZE[relic.kind]);
+    const size = RELIC_SIZE[relic.kind];
+    if (relic.kind === 'core') {
+      const glow = ctx.createRadialGradient(cx, cy + bob, 4, cx, cy + bob, size * 0.7);
+      glow.addColorStop(0, 'rgba(231, 195, 106, 0.72)');
+      glow.addColorStop(1, 'rgba(231, 195, 106, 0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(cx, cy + bob, size * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (ready(image)) drawCentered(ctx, image, cx, cy + bob, size);
   }
 
   for (const [index, enemy] of run.enemies.entries()) {

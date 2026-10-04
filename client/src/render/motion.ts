@@ -1,3 +1,5 @@
+import { now as clockNow } from './clock';
+
 export type Clip = 'idle' | 'walk' | 'attack';
 
 interface Track {
@@ -21,7 +23,7 @@ export function resetMotion(): void {
 }
 
 export function playAttack(id: string, x: number, y: number): void {
-  const now = performance.now();
+  const now = clockNow();
   const prev = tracks.get(id);
   const px = prev?.toX ?? x;
   const py = prev?.toY ?? y;
@@ -42,7 +44,7 @@ export function sampleActor(id: string, x: number, y: number): {
   clip: Clip;
   phase: number;
 } {
-  const now = performance.now();
+  const now = clockNow();
   let track = tracks.get(id);
   if (!track) {
     track = { fromX: x, fromY: y, toX: x, toY: y, start: now, duration: 1, clip: 'idle' };

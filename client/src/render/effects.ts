@@ -1,3 +1,5 @@
+import { now as clockNow } from './clock';
+
 interface DamagePopup {
   x: number;
   y: number;
@@ -18,30 +20,31 @@ let popups: DamagePopup[] = [];
 let shake: Shake | null = null;
 
 export function spawnPopup(x: number, y: number, text: string, color: string): void {
-  popups.push({ x, y, text, color, start: performance.now() });
+  popups.push({ x, y, text, color, start: clockNow() });
 }
 
 export function triggerShake(duration = 150, magnitude = 6): void {
-  shake = { start: performance.now(), duration, magnitude };
+  shake = { start: clockNow(), duration, magnitude };
 }
 
 export function getShakeOffset(): [number, number] {
   if (!shake) return [0, 0];
-  const elapsed = performance.now() - shake.start;
+  const elapsed = clockNow() - shake.start;
   if (elapsed > shake.duration) {
     shake = null;
     return [0, 0];
   }
   const decay = 1 - elapsed / shake.duration;
   const mag = shake.magnitude * decay;
-  return [(Math.random() * 2 - 1) * mag, (Math.random() * 2 - 1) * mag];
+  // Deterministic in visual time, so the shake holds still during a hit stop.
+  return [Math.sin(elapsed * 0.9 + 1.3) * mag, Math.cos(elapsed * 1.1) * mag];
 }
 
 export function drawPopups(
   ctx: CanvasRenderingContext2D,
   toScreen: (x: number, y: number) => { cx: number; cy: number }
 ): void {
-  const now = performance.now();
+  const now = clockNow();
   popups = popups.filter((p) => now - p.start < POPUP_LIFETIME_MS);
   for (const popup of popups) {
     const t = (now - popup.start) / POPUP_LIFETIME_MS;
@@ -62,13 +65,13 @@ const flashes = new Map<string, number>();
 
 /** Briefly whitens an actor so a hit reads before the damage number does. */
 export function flashActor(id: string): void {
-  flashes.set(id, performance.now());
+  flashes.set(id, clockNow());
 }
 
 export function isFlashing(id: string): boolean {
   const started = flashes.get(id);
   if (started === undefined) return false;
-  if (performance.now() - started > FLASH_MS) {
+  if (clockNow() - started > FLASH_MS) {
     flashes.delete(id);
     return false;
   }
@@ -100,7 +103,7 @@ const BURST_SPECS: Record<BurstKind, { count: number; speed: number; ttl: number
 /** Sparks and shards that fly out of a cell. Coordinates are in grid cells. */
 export function spawnBurst(x: number, y: number, kind: BurstKind): void {
   const spec = BURST_SPECS[kind];
-  const now = performance.now();
+  const now = clockNow();
   for (let i = 0; i < spec.count; i += 1) {
     const angle = Math.random() * Math.PI * 2;
     const speed = spec.speed * (0.35 + Math.random() * 0.65);
@@ -122,7 +125,7 @@ export function drawParticles(
   ctx: CanvasRenderingContext2D,
   toScreen: (x: number, y: number) => { cx: number; cy: number }
 ): void {
-  const now = performance.now();
+  const now = clockNow();
   particles = particles.filter((p) => now - p.start < p.ttl);
   for (const p of particles) {
     const age = (now - p.start) / 1000;
@@ -148,7 +151,7 @@ export function drawLowHealth(ctx: CanvasRenderingContext2D, ratio: number): voi
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
   const urgency = 1 - ratio / 0.34;
-  const beat = Math.pow(Math.max(0, Math.sin(performance.now() / 1000 * (3.2 + urgency * 2))), 6);
+  const beat = Math.pow(Math.max(0, Math.sin(clockNow() / 1000 * (3.2 + urgency * 2))), 6);
   const alpha = (0.1 + urgency * 0.28) * (0.45 + 0.55 * beat);
   const g = ctx.createRadialGradient(w / 2, h / 2, h * 0.32, w / 2, h / 2, h * 0.8);
   g.addColorStop(0, 'rgba(255, 60, 50, 0)');
