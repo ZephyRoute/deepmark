@@ -1,5 +1,5 @@
 import { STELLAR_CONFIG } from '../stellar/config';
-import { MAX_TRACKED_FLOOR, type DayCount, type PlayerMark, type RecordedRun, type TractionSummary } from './summary';
+import { MAX_TRACKED_FLOOR, PLAYER_CAP, type DayCount, type PlayerMark, type RecordedRun, type TractionSummary } from './summary';
 
 const WHEN = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'UTC',
@@ -116,7 +116,7 @@ function playerCard(player: PlayerMark): HTMLElement {
     el(
       'p',
       'player-meta',
-      `Best floor ${player.bestFloor} / ${MAX_TRACKED_FLOOR}  ·  Best relics ${player.bestRelics}  ·  Runs ${player.totalRuns}`
+      `Best score ${player.bestScore}  ·  Best floor ${player.bestFloor} / ${MAX_TRACKED_FLOOR}  ·  Runs ${player.finishedRuns}`
     )
   );
   const actions = el('div', 'player-actions');
@@ -130,7 +130,8 @@ function runCard(run: RecordedRun): HTMLElement {
   const card = el('article', 'player-card');
   const parsed = Date.parse(run.at);
   const when = Number.isFinite(parsed) ? `${WHEN.format(parsed)} UTC` : run.at;
-  card.append(el('p', 'player-meta', `${when}  ·  Floor ${run.floorReached}  ·  Relics kept ${run.relicsKept}`));
+  const result = run.extracted ? `Extracted, score ${run.score}` : 'Lost';
+  card.append(el('p', 'player-meta', `${when}  ·  Floor ${run.floorReached}  ·  ${result}`));
   card.append(el('p', 'address', run.address));
   card.append(externalLink(viewTx(run.txHash), 'Transaction'));
   return card;
@@ -156,7 +157,7 @@ export function renderSummary(root: HTMLElement, summary: TractionSummary): void
     el(
       'p',
       'lede',
-      'A player is a Stellar address with at least one finished run stored on the contract. Opening the game without finishing a run is not counted.'
+      'A player is a Stellar address with at least one finished run on the contract. Every run here was replayed by the contract before it counted. Opening the game without finishing a run is not counted.'
     )
   );
 
@@ -165,10 +166,11 @@ export function renderSummary(root: HTMLElement, summary: TractionSummary): void
   metrics.append(metric(String(summary.recordedRuns), 'Recorded runs'));
   metrics.append(metric(String(summary.bestFloorThree), 'Best floor is 3'));
   metrics.append(metric(String(summary.bankedRelic), 'Banked a relic'));
+  metrics.append(metric(String(summary.openedCount), 'Opened a run'));
   body.append(metrics);
 
   if (summary.listCapped) {
-    body.append(el('p', 'note', `The contract keeps the first ${500} player addresses. Later addresses are not in this list.`));
+    body.append(el('p', 'note', `This page reads the first ${PLAYER_CAP} players. More exist on the contract.`));
   }
 
   const floors = el('section', 'block');
@@ -224,7 +226,7 @@ export function renderSummary(root: HTMLElement, summary: TractionSummary): void
   fine.append('Stored by ');
   fine.append(externalLink(viewContract(), STELLAR_CONFIG.contractId));
   fine.append(
-    '. The contract does not replay the dungeon. A floor or a relic count is the result that address submitted. A death banks no relics. The relic figure is the most that address has banked on any recorded run.'
+    '. The contract replays each run from its action log and derives the floor, score and relics itself, so a result cannot be claimed without playing it. A death banks no relics.'
   );
   body.append(fine);
 

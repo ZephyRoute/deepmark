@@ -1,5 +1,6 @@
 export const MAX_TRACKED_FLOOR = 3;
-export const PLAYER_CAP = 500;
+/** Most players one page load reads. At 50 per call this is 40 requests. */
+export const PLAYER_CAP = 2000;
 export const DAY_CAP = 14;
 
 const COUNT_LIMIT = 1_000_000;
@@ -9,15 +10,21 @@ const TX_HASH = /^[a-f0-9]{64}$/;
 export interface PlayerMark {
   address: string;
   bestFloor: number;
-  bestRelics: number;
-  totalRuns: number;
+  bestScore: number;
+  extractions: number;
+  deaths: number;
+  forfeits: number;
+  relicsBanked: number;
+  /** Finished runs, which is extractions plus deaths. Abandoned runs are not counted. */
+  finishedRuns: number;
 }
 
 export interface RecordedRun {
   at: string;
   address: string;
   floorReached: number;
-  relicsKept: number;
+  score: number;
+  extracted: boolean;
   txHash: string;
 }
 
@@ -34,6 +41,8 @@ export interface EventWindow {
 export interface TractionSummary {
   players: PlayerMark[];
   playerCount: number;
+  /** Addresses that opened a run, finished or not. */
+  openedCount: number;
   recordedRuns: number;
   bestFloorThree: number;
   bankedRelic: number;
@@ -91,13 +100,14 @@ export function summarize(
   runs: RecordedRun[],
   eventWindow: EventWindow | null,
   eventsTruncated: boolean,
+  openedCount: number,
   listCapped: boolean
 ): TractionSummary {
   const sorted = [...players].sort(
     (a, b) =>
+      b.bestScore - a.bestScore ||
       b.bestFloor - a.bestFloor ||
-      b.bestRelics - a.bestRelics ||
-      b.totalRuns - a.totalRuns ||
+      b.finishedRuns - a.finishedRuns ||
       (a.address < b.address ? -1 : a.address > b.address ? 1 : 0)
   );
   const floorCounts = [0, 0, 0, 0];
@@ -105,9 +115,9 @@ export function summarize(
   let bestFloorThree = 0;
   let bankedRelic = 0;
   for (const player of sorted) {
-    recordedRuns += player.totalRuns;
+    recordedRuns += player.finishedRuns;
     if (player.bestFloor === MAX_TRACKED_FLOOR) bestFloorThree += 1;
-    if (player.bestRelics > 0) bankedRelic += 1;
+    if (player.relicsBanked > 0) bankedRelic += 1;
     const bucket = floorCounts[player.bestFloor];
     if (bucket !== undefined) floorCounts[player.bestFloor] = bucket + 1;
   }
@@ -123,6 +133,7 @@ export function summarize(
   return {
     players: sorted,
     playerCount: sorted.length,
+    openedCount,
     recordedRuns,
     bestFloorThree,
     bankedRelic,

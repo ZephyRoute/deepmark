@@ -7,6 +7,11 @@ export type Action =
   | 'cancel'
   | 'leaderboard'
   | 'stats'
+  | 'vault'
+  | 'mute'
+  | 'retryVerify'
+  | 'tabFresh'
+  | 'tabVeteran'
   | 'pickLantern'
   | 'pickCinder';
 
@@ -24,6 +29,8 @@ const KEY_MAP: Record<string, Action> = {
   Escape: 'cancel',
   KeyL: 'leaderboard',
   KeyM: 'stats',
+  KeyV: 'vault',
+  KeyN: 'mute',
 };
 
 const ACTIONS: readonly Action[] = [
@@ -35,6 +42,11 @@ const ACTIONS: readonly Action[] = [
   'cancel',
   'leaderboard',
   'stats',
+  'vault',
+  'mute',
+  'retryVerify',
+  'tabFresh',
+  'tabVeteran',
   'pickLantern',
   'pickCinder',
 ];
@@ -49,9 +61,17 @@ export function emitAction(action: Action): void {
   emit?.(action);
 }
 
+/** Fields and anything inside a form (the creator) keep their own keys. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true;
+  return target instanceof Element && target.closest('form') !== null;
+}
+
 export function onAction(handler: (action: Action) => void): void {
   emit = handler;
   window.addEventListener('keydown', (event) => {
+    // Typing in a field (the delver's name) must never be read as a game key.
+    if (isTypingTarget(event.target)) return;
     const action = KEY_MAP[event.code];
     if (!action) return;
     event.preventDefault();

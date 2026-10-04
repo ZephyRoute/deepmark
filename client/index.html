@@ -6,12 +6,15 @@
   <meta name="description" content="Deepmark is a turn-based dungeon crawler. Bank your relics or push deeper, and leave a verifiable mark on Stellar." />
   <meta name="theme-color" content="#07080e" />
   <title>Deepmark</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/src/styles.css" />
 </head>
 <body>
   <div id="app">
     <header class="topbar">
       <p class="brand">Deepmark</p>
       <p id="floor-label" class="floor-label"></p>
+      <button type="button" id="mute" class="btn btn-mini" data-action="mute" aria-pressed="false">Sound on</button>
     </header>
     <main class="stage-wrap">
       <div class="stage">
@@ -21,9 +24,12 @@
     </main>
     <section id="hud" class="hud" hidden>
       <div class="hud-stats">
-        <span id="hud-hp"></span>
+        <span id="hud-name"></span>
+        <span id="hud-hp" class="hud-hp"><span class="hp-track"><span id="hp-ghost" class="hp-ghost"></span><span id="hp-fill" class="hp-fill"></span></span><span id="hp-text" class="hp-text"></span></span>
         <span id="hud-relics"></span>
         <span id="hud-score"></span>
+        <span id="hud-mode"></span>
+        <span class="hud-key"><span class="swatch swatch-open"></span>Open<span class="swatch swatch-block"></span>Blocked</span>
       </div>
       <p id="hud-log" class="hud-log"></p>
     </section>
