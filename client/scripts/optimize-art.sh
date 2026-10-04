@@ -1,18 +1,26 @@
 #!/usr/bin/env bash
 # Converts raster art in public/art to WebP with sizes that match how each file
-# is drawn. The PNG or JPEG is copied into the internal art library first, then
-# removed from the client so the game bundle stays small. If that library is
-# not on disk, the source stays put. Files already in WebP are left alone.
-# Needs cwebp (brew install webp).
+# is drawn. Pass the masters directory, or set DEEPMARK_ART_LIBRARY to it.
+# The PNG or JPEG is copied there, then removed from the client so the game
+# bundle stays small. With no destination the source stays put.
+# Files already in WebP are left alone. Needs cwebp (brew install webp).
+#
+#   ./scripts/optimize-art.sh /path/to/art/library/masters
+#   DEEPMARK_ART_LIBRARY=/path/to/art/library/masters ./scripts/optimize-art.sh
 set -euo pipefail
 script_dir="$(cd "$(dirname "$0")" && pwd)"
-archive="$(cd "$script_dir/../../../deepmark-internal/docs/art/library/masters" 2>/dev/null && pwd || true)"
+archive=""
+if [ -n "${1:-}" ]; then
+  archive="$(cd "$1" && pwd)"
+elif [ -n "${DEEPMARK_ART_LIBRARY:-}" ]; then
+  archive="$(cd "$DEEPMARK_ART_LIBRARY" && pwd)"
+fi
 cd "$script_dir/../public/art"
 
 keep() {
   local f="$1"
   if [ -z "$archive" ]; then
-    echo "leaving $f in the client: deepmark-internal art library is not checked out" >&2
+    echo "leaving $f in the client: set DEEPMARK_ART_LIBRARY or pass the masters directory" >&2
     return 0
   fi
   if [ ! -e "$archive/$f" ]; then
