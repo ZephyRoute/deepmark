@@ -236,7 +236,7 @@ function livingEnemyAt(run: RunState, x: number, y: number): boolean {
 /**
  * Walls and floors share one dark stone palette, so the crop of a cell
  * does not say which is blocked. Crush the walls, lift the floor, and
- * draw a cyan seam plus a cast shadow on every edge a step can meet.
+ * draw a quiet stone seam plus a cast shadow on every edge a step can meet.
  */
 function paintBoard(ctx: CanvasRenderingContext2D, run: RunState, offsetX: number): void {
   const theme = biome(run.floorNumber);
@@ -310,7 +310,7 @@ function shadeOpenEdge(
   ctx.fillStyle = gradient;
   ctx.fillRect(sx, sy, sw, sh);
 
-  ctx.fillStyle = 'rgba(126, 240, 224, 0.78)';
+  ctx.fillStyle = 'rgba(176, 170, 160, 0.38)';
   if (side === 'n') ctx.fillRect(dx, dy, TILE_SIZE, 2);
   else if (side === 's') ctx.fillRect(dx, dy + TILE_SIZE - 2, TILE_SIZE, 2);
   else if (side === 'w') ctx.fillRect(dx, dy, 2, TILE_SIZE);
@@ -343,7 +343,7 @@ function paintReach(ctx: CanvasRenderingContext2D, run: RunState, offsetX: numbe
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(Math.PI / 4);
-    ctx.fillStyle = 'rgba(126, 240, 224, 0.72)';
+    ctx.fillStyle = 'rgba(196, 190, 180, 0.42)';
     ctx.fillRect(-4, -4, 8, 8);
     ctx.restore();
   }

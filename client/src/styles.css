@@ -363,8 +363,8 @@ body:has(#overlay:not([hidden])) .touch {
 }
 
 .swatch-open {
-  background: #3d4c5c;
-  box-shadow: inset 0 0 0 2px rgba(126, 240, 224, 0.85);
+  background: #3a414c;
+  box-shadow: inset 0 0 0 2px rgba(176, 170, 160, 0.7);
 }
 
 .swatch-block {
