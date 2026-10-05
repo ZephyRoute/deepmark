@@ -855,20 +855,38 @@ body:has(#overlay:not([hidden])) .touch {
 @keyframes banner-title { 0% { letter-spacing: 0.5em; opacity: 0; } 30% { letter-spacing: 0.22em; opacity: 1; } 100% { letter-spacing: 0.26em; opacity: 1; } }
 
 /* The result ceremony. */
-.overlay:has(.result-win) {
-  background:
-    linear-gradient(180deg, rgba(7, 8, 14, 0.55) 0%, rgba(7, 8, 14, 0.88) 100%),
-    url("/art/victory-bg.webp") center 100% / cover no-repeat;
-  animation: result-drift-up 14s ease-out both;
-}
+/* The win/loss backdrop drifts via `transform`, not `background-position`, so the
+   14 second settle is a compositor-only animation instead of a repaint on every frame. */
+.overlay:has(.result-win),
 .overlay:has(.result-loss) {
-  background:
+  overflow: hidden;
+}
+.overlay:has(.result-win)::before,
+.overlay:has(.result-loss)::before {
+  content: "";
+  position: absolute;
+  inset: -6% 0;
+  z-index: -1;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+.overlay:has(.result-win)::before {
+  background-image:
+    linear-gradient(180deg, rgba(7, 8, 14, 0.55) 0%, rgba(7, 8, 14, 0.88) 100%),
+    url("/art/victory-bg.webp");
+  background-position: center 100%, center;
+  animation: result-drift-up 14s ease-out both;
+  will-change: transform;
+}
+.overlay:has(.result-loss)::before {
+  background-image:
     linear-gradient(180deg, rgba(7, 8, 14, 0.75) 0%, rgba(7, 8, 14, 0.94) 100%),
-    url("/art/vault-bg.webp") center / cover no-repeat;
+    url("/art/vault-bg.webp");
+  background-position: center;
 }
 @keyframes result-drift-up {
-  from { background-position: center 100%, center; }
-  to { background-position: center 82%, center; }
+  from { transform: translateY(3%); }
+  to { transform: translateY(0); }
 }
 
 .result { display: flex; flex-direction: column; gap: 10px; width: min(100%, 520px); }
@@ -947,7 +965,7 @@ body:has(#overlay:not([hidden])) .touch {
   .result-eyebrow, .result-title, .result-stat, .ribbon-pip, .chip-rank, .result-hero.is-revealed { animation: none; opacity: 1; }
   .ribbon.is-pending .ribbon-sweep { animation: none; opacity: 0.6; left: 33%; }
   .bump, .hud-hp.is-low .hp-fill { animation: none; }
-  .overlay:has(.result-win) { animation: none; background-position: center 88%, center; }
+  .overlay:has(.result-win)::before { animation: none; transform: translateY(0); }
 }
 
 .result [hidden] { display: none !important; }
