@@ -36,6 +36,7 @@ import {
   toggleMuted,
 } from './render/audio';
 import { loadDraft, loadoutOf, type Draft } from './game/draft';
+import { noteHintInput, resetHints, showHint } from './render/hints';
 import { MAX_FLOOR } from './game/floor';
 import { HEROES, HERO_ORDER } from './game/heroes';
 import { CHARMS, WEAPONS } from './game/items';
@@ -301,6 +302,7 @@ async function beginRun(plan: DelverPlan): Promise<void> {
     starting = false;
     descent = null;
   }
+  showHint('move');
 }
 
 /** Sends the action log. The contract replays it and decides the result. */
@@ -453,6 +455,7 @@ function handleEvent(event: GameEvent): void {
       break;
     case 'floorCleared':
       sfxFloorCleared();
+      showHint('choice');
       break;
     case 'descended':
       resetMotion();
@@ -482,6 +485,7 @@ function handleEvent(event: GameEvent): void {
       if (run && !practice) void verifyOnChain(run);
       break;
     case 'combatStart':
+      showHint('combat');
       break;
   }
 }
@@ -512,6 +516,7 @@ onAction((action) => {
   if (!run) sfxUi();
   if (showStats) {
     if (action === 'stats' || action === 'cancel') showStats = false;
+    if (action === 'replayHints') resetHints();
     return;
   }
 
@@ -572,15 +577,18 @@ onAction((action) => {
   if (run.mode === 'combat') {
     if (action === 'confirm') applyAction(run, ActionCode.Attack);
     if (action === 'cancel') applyAction(run, ActionCode.Retreat);
+    noteHintInput(action);
   } else if (run.mode === 'choice') {
     if (action === 'confirm') applyAction(run, ActionCode.Descend);
     if (action === 'cancel') applyAction(run, ActionCode.Extract);
+    noteHintInput(action);
   } else {
     const dir = DIRS[action];
     if (dir) {
       if (dir[0] !== 0) face(dir[0] < 0 ? -1 : 1);
       const moved = applyAction(run, MOVE_CODES[action as keyof typeof MOVE_CODES]);
       if (moved && run.mode === 'explore') sfxStep();
+      noteHintInput(action);
     }
   }
 

@@ -461,7 +461,9 @@ function statsCard(view: ChromeView): HTMLElement {
   }
   card.append(chain);
 
-  card.append(button('Back', 'cancel', 'btn'));
+  const actions = el('div', 'result-actions');
+  actions.append(button('Replay hints', 'replayHints', 'btn'), button('Back', 'cancel', 'btn'));
+  card.append(actions);
   return card;
 }
 
