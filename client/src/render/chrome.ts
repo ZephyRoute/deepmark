@@ -1,5 +1,5 @@
 import { ENEMIES } from '../game/enemies';
-import { MAX_FLOOR } from '../game/floor';
+import { buildFloor, MAX_FLOOR, type RelicKind } from '../game/floor';
 import { HEROES, HERO_ORDER } from '../game/heroes';
 import type { Progress } from '../game/progress';
 import type { RunState } from '../game/state';
@@ -70,6 +70,7 @@ export interface ChromeView {
   startStage: DescentStage;
   descent: DescentOptions | null;
   practice: boolean;
+  onDescendHover: (hovering: boolean) => void;
   /** Fired once, synchronously with the seal's strike animation, when a run is verified. */
   onSeal: () => void;
 }
@@ -198,7 +199,7 @@ function renderOverlay(view: ChromeView): void {
   if (view.run.mode === 'combat' || view.run.mode === 'choice') {
     overlay.hidden = false;
     overlay.classList.add('overlay-prompt');
-    overlay.append(view.run.mode === 'combat' ? combatCard(view.run) : choiceCard(view.run));
+    overlay.append(view.run.mode === 'combat' ? combatCard(view.run) : choiceCard(view.run, view.onDescendHover));
     return;
   }
 
@@ -501,13 +502,52 @@ function combatCard(run: RunState): HTMLElement {
   return card;
 }
 
-function choiceCard(run: RunState): HTMLElement {
+const RELIC_KIND_ORDER: readonly RelicKind[] = ['core', 'rare', 'common'];
+
+function choiceCard(run: RunState, onDescendHover: (hovering: boolean) => void): HTMLElement {
   const card = el('div', 'prompt prompt-safe');
   card.append(el('p', 'prompt-title', `Floor ${run.floorNumber} is clear.`));
-  card.append(el('p', 'prompt-sub', `${run.relicsThisRun} relics in hand. Descending keeps your HP and raises the risk.`));
+
+  const stake = el('div', 'choice-stake');
+
+  const hpRow = el('div', 'choice-hp');
+  const track = el('span', 'hp-track');
+  const fill = el('span', 'hp-fill');
+  const ratio = run.player.maxHp > 0 ? Math.max(0, Math.min(1, run.player.hp / run.player.maxHp)) : 0;
+  fill.style.width = `${(ratio * 100).toFixed(1)}%`;
+  track.append(fill);
+  hpRow.append(track, el('span', 'choice-hp-text', `${run.player.hp} / ${run.player.maxHp} HP`));
+  stake.append(hpRow);
+
+  const held = RELIC_KIND_ORDER.filter((kind) => run.relicsByKind[kind] > 0);
+  if (held.length > 0) {
+    const relicRow = el('div', 'choice-relics');
+    for (const kind of held) {
+      const chip = el('span', 'choice-relic-chip');
+      const icon = el('img', 'choice-relic-icon');
+      icon.src = `/art/relic-${kind}.webp`;
+      icon.alt = '';
+      chip.append(icon, el('span', '', `×${run.relicsByKind[kind]}`));
+      relicRow.append(chip);
+    }
+    stake.append(relicRow);
+  }
+
+  stake.append(el('span', 'choice-score', `Score ${run.scoreThisRun}`));
+  card.append(stake);
+
+  const nextLayout = buildFloor(run.floorNumber + 1);
+  const guardians = [...new Set(nextLayout.enemies.map((enemy) => ENEMIES[enemy.kind].name))];
+  if (guardians.length > 0) {
+    card.append(el('p', 'prompt-sub', `Ahead: ${guardians.join(', ')}.`));
+  }
+  card.append(el('p', 'prompt-sub', 'Descending keeps your HP and raises the risk. Extracting banks what you hold.'));
+
   const actions = el('div', 'prompt-actions');
-  actions.append(button('Descend', 'confirm', 'btn btn-primary'));
-  actions.append(button('Extract', 'cancel', 'btn'));
+  const descend = button('Descend', 'confirm', 'btn btn-primary');
+  descend.addEventListener('pointerenter', () => onDescendHover(true));
+  descend.addEventListener('pointerleave', () => onDescendHover(false));
+  actions.append(descend, button('Extract', 'cancel', 'btn'));
   card.append(actions);
   return card;
 }

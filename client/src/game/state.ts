@@ -71,6 +71,9 @@ export interface RunState {
   activeEnemyIndex: number | null;
   relics: RelicState[];
   relicsThisRun: number;
+  /** Relics currently held, by kind, for the choice prompt. Display only: the contract
+   *  derives the authoritative count itself by replaying `actions`, never this field. */
+  relicsByKind: Record<RelicKind, number>;
   scoreThisRun: number;
   resultKind: ResultKind | null;
   /** Every input that changed the game, in order. This is what the contract replays. */
@@ -122,6 +125,7 @@ export function newRun(loadout: Loadout, seed: number = freshSeed(), look: Look 
     activeEnemyIndex: null,
     relics,
     relicsThisRun: 0,
+    relicsByKind: { common: 0, rare: 0, core: 0 },
     scoreThisRun: 0,
     resultKind: null,
     actions: [],
@@ -155,6 +159,7 @@ function finishRun(state: RunState, kind: ResultKind): void {
   const relicsKept = kind === 'dead' ? 0 : state.relicsThisRun;
   if (kind === 'dead') {
     state.relicsThisRun = 0;
+    state.relicsByKind = { common: 0, rare: 0, core: 0 };
     state.scoreThisRun = 0;
   }
   const { isNewBest } = recordRun({
@@ -192,6 +197,7 @@ function tryMove(state: RunState, dx: number, dy: number): boolean {
   if (relic) {
     relic.collected = true;
     state.relicsThisRun += 1;
+    state.relicsByKind[relic.kind] += 1;
     state.scoreThisRun += RELIC_VALUE[relic.kind];
     pushLog(state, `You pry loose a ${relic.kind} relic. It hums faintly.`);
     pushEvent(state, { type: 'relic', kind: relic.kind, x: relic.x, y: relic.y });
