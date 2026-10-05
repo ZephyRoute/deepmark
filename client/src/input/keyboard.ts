@@ -13,7 +13,10 @@ export type Action =
   | 'tabFresh'
   | 'tabVeteran'
   | 'pickLantern'
-  | 'pickCinder';
+  | 'pickCinder'
+  | 'shareSave'
+  | 'shareCopy'
+  | 'shareChallenge';
 
 const KEY_MAP: Record<string, Action> = {
   ArrowUp: 'up',
@@ -49,6 +52,9 @@ const ACTIONS: readonly Action[] = [
   'tabVeteran',
   'pickLantern',
   'pickCinder',
+  'shareSave',
+  'shareCopy',
+  'shareChallenge',
 ];
 
 function isAction(value: string | undefined): value is Action {

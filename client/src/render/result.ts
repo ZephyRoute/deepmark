@@ -180,6 +180,20 @@ export function mountResult(host: HTMLElement, summary: ResultSummary): void {
   hero.append(medallion, heroCopy);
   card.append(hero);
 
+  const share = el('div', 'share-actions');
+  share.hidden = true;
+  const shareSave = el('button', 'btn', 'Save image');
+  shareSave.type = 'button';
+  shareSave.dataset.action = 'shareSave';
+  const shareCopy = el('button', 'btn', 'Copy image');
+  shareCopy.type = 'button';
+  shareCopy.dataset.action = 'shareCopy';
+  const shareChallenge = el('button', 'btn', 'Copy challenge link');
+  shareChallenge.type = 'button';
+  shareChallenge.dataset.action = 'shareChallenge';
+  share.append(shareSave, shareCopy, shareChallenge);
+  card.append(share);
+
   const actions = el('div', 'result-actions');
   const retry = el('button', 'btn', 'Try again');
   retry.type = 'button';
@@ -213,6 +227,7 @@ export function mountResult(host: HTMLElement, summary: ResultSummary): void {
         sealed = true;
         ribbon.classList.add('is-sealed');
       }
+      if (summary.won) share.hidden = false;
     } else {
       story.textContent = v.message;
     }
