@@ -238,6 +238,7 @@ function planVeteran(hero: Hero): DelverPlan {
 async function beginRun(plan: DelverPlan): Promise<void> {
   if (starting) return;
   starting = true;
+  canvas.classList.remove('board-sunk');
   startStage = 'account';
   const openedAt = performance.now();
   const heroId = HERO_ORDER[plan.loadout.base] ?? 'lantern';
@@ -477,6 +478,7 @@ function handleEvent(event: GameEvent): void {
       stopAmbience();
       sfxDead();
       triggerShake(250, 10);
+      canvas.classList.add('board-sunk');
       progress = loadProgress();
       runId += 1;
       if (run && !practice) void verifyOnChain(run);
@@ -596,8 +598,9 @@ function frame(): void {
       sfxHeartbeat();
     }
   }
+  const sunkDefeat = run && run.mode === 'result' && run.resultKind !== 'extracted' && !showLeaderboard && !showStats;
   if (run && !showLeaderboard && !showStats && run.mode !== 'result') drawWorld(ctx, run);
-  else {
+  else if (!sunkDefeat) {
     ctx.fillStyle = '#07080e';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
