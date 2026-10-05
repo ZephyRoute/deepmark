@@ -93,6 +93,14 @@ canvas {
   width: 100%;
   height: 100%;
   display: block;
+  transition: filter 900ms ease, transform 900ms ease;
+}
+
+/* A loss keeps the last drawn frame instead of cutting to black: the board
+   itself sinks under the result card instead of disappearing. */
+canvas.board-sunk {
+  filter: grayscale(0.85) brightness(0.5);
+  transform: translateY(6px);
 }
 
 .overlay {
@@ -113,6 +121,13 @@ canvas {
 }
 
 .overlay[hidden] { display: none; }
+
+/* A loss: the overlay itself stays translucent so the sunk board reads as
+   the backdrop, darkening toward the card instead of a flat fill. A win is
+   unchanged, it keeps the plain `.overlay` background above. */
+.overlay:has(.result-loss) {
+  background: linear-gradient(180deg, rgba(5, 6, 11, 0.35) 0%, rgba(5, 6, 11, 0.9) 70%);
+}
 
 .overlay-prompt {
   place-items: end center;
@@ -230,6 +245,48 @@ body:has(#overlay:not([hidden])) .touch {
   font-size: 1.05rem;
 }
 
+/* The bank-or-push prompt: exactly what is at stake, nothing the player could not already work out. */
+.choice-stake {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 0;
+}
+
+.choice-hp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.choice-hp-text {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.86rem;
+}
+
+.choice-relics {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.choice-relic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.86rem;
+}
+
+.choice-relic-icon { width: 20px; height: 20px; object-fit: contain; }
+
+.choice-score {
+  margin-left: auto;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.86rem;
+}
+
 .new-best {
   margin: 0;
   color: var(--gold);
@@ -303,6 +360,25 @@ body:has(#overlay:not([hidden])) .touch {
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.volume-label {
+  width: 72px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.volume-input {
+  flex: 1;
+  accent-color: var(--cyan);
+}
+
 .board-head, .board-row {
   display: grid;
   grid-template-columns: 24px 1fr 40px 40px 30px 46px;
@@ -326,12 +402,18 @@ body:has(#overlay:not([hidden])) .touch {
   min-height: 36px;
   padding: 4px 6px;
   border-radius: 8px;
+  animation: rise 240ms ease both;
 }
 
-.board-row.is-you {
-  background: rgba(126, 240, 224, 0.12);
-  color: var(--cyan);
-}
+.board-row.is-you { color: var(--cyan); }
+
+/* The own row, right after it verifies this session: slides in on its own, holds a
+   glow for about two seconds then lets it go, with the rank settling in last. */
+.board-row.is-fresh { animation: board-slide-in 320ms ease both, board-row-glow 2.4s ease forwards; }
+.board-row.is-fresh .board-rank { display: inline-block; animation: rise 240ms ease both; }
+
+@keyframes board-slide-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+@keyframes board-row-glow { 0%, 83% { background: rgba(126, 240, 224, 0.28); } 100% { background: rgba(126, 240, 224, 0); } }
 
 .hud {
   width: min(100%, calc((100dvh - 150px) * 832 / 576));
@@ -565,6 +647,30 @@ body:has(#overlay:not([hidden])) .touch {
 .board-addr { color: var(--muted); font-size: 0.72rem; }
 
 /* Vault */
+.vault-view {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.vault-backdrop {
+  position: absolute;
+  inset: -6%;
+  z-index: 0;
+  background:
+    linear-gradient(180deg, rgba(7, 8, 14, 0.55) 0%, rgba(7, 8, 14, 0.88) 100%),
+    url("/art/vault-bg.webp") center / cover no-repeat;
+  animation: vault-drift 48s ease-in-out infinite alternate;
+}
+
+@keyframes vault-drift { from { transform: scale(1.06); } to { transform: scale(1.14) translate(-1.5%, -1%); } }
+
+.vault-view > .panel-wide { position: relative; z-index: 1; }
+
 .vault-list { display: flex; flex-direction: column; gap: 10px; margin: 8px 0; }
 
 .vault-card {
@@ -576,12 +682,17 @@ body:has(#overlay:not([hidden])) .touch {
   border-radius: 14px;
   border: 1px solid var(--line);
   background: rgba(8, 10, 16, 0.55);
+  animation: rise 240ms ease both;
 }
 
 .vault-card .btn { grid-column: 1 / -1; }
 .vault-portrait { width: 56px; height: 70px; object-fit: contain; object-position: center bottom; }
 .vault-name { display: flex; align-items: center; gap: 6px; margin: 0; font-family: Palatino, "Iowan Old Style", Georgia, serif; font-size: 1.15rem; }
 .vault-kit, .vault-meta { margin: 2px 0 0; font-size: 0.82rem; color: var(--muted); }
+
+.vault-pips { display: inline-flex; gap: 4px; margin-right: 6px; vertical-align: middle; }
+.vault-pip { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: rgba(232, 224, 208, 0.18); border: 1px solid var(--line); }
+.vault-pip.is-filled { background: var(--gold); border-color: rgba(231, 195, 106, 0.6); }
 
 #hud-name { color: var(--gold); }
 
@@ -948,6 +1059,8 @@ body:has(#overlay:not([hidden])) .touch {
 }
 
 .result { display: flex; flex-direction: column; gap: 10px; width: min(100%, 520px); }
+/* The board sinks first; the card follows 300ms later instead of both at once. */
+.result-loss { opacity: 0; animation: rise 500ms ease 300ms both; }
 .result-eyebrow { margin: 0; color: var(--muted); font-size: 0.74rem; letter-spacing: 0.22em; text-transform: uppercase; animation: rise 600ms ease both; }
 .result-title { margin: 0; font-family: Palatino, "Iowan Old Style", Georgia, serif; font-size: clamp(2rem, 7vw, 3rem); font-weight: 500; letter-spacing: 0.04em; animation: title-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .result-win .result-title { color: #f7e9c0; text-shadow: 0 0 36px rgba(231, 195, 106, 0.35); }
@@ -1020,9 +1133,13 @@ body:has(#overlay:not([hidden])) .touch {
 
 @media (prefers-reduced-motion: reduce) {
   .overlay > .panel, .overlay > .title-screen, .overlay > .prompt, .banner, .banner-line, .banner-title,
-  .result-eyebrow, .result-title, .result-stat, .ribbon-pip, .chip-rank, .result-hero.is-revealed { animation: none; opacity: 1; }
+  .result-eyebrow, .result-title, .result-stat, .ribbon-pip, .chip-rank, .result-hero.is-revealed,
+  .result-loss, .board-row, .board-row.is-fresh .board-rank, .vault-card { animation: none; opacity: 1; }
   .ribbon.is-pending .ribbon-sweep { animation: none; opacity: 0.6; left: 33%; }
   .bump, .hud-hp.is-low .hp-fill { animation: none; }
+  canvas.board-sunk { transition: none; }
+  .board-row.is-fresh { animation: none; background: rgba(126, 240, 224, 0.28); }
+  .vault-backdrop { animation: none; }
   .overlay:has(.result-win)::before { animation: none; transform: translateY(0); }
 }
 
