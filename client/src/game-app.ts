@@ -10,7 +10,7 @@ import {
   type LeaderboardRow,
   type OnchainSnapshot,
 } from './render/chrome';
-import { flashActor, spawnBurst, spawnPopup, triggerShake } from './render/effects';
+import { drainArrivedRelics, flashActor, spawnBurst, spawnPopup, spawnRelicTravel, triggerShake } from './render/effects';
 import { showBanner } from './render/banner';
 import { hitStop, punch } from './render/clock';
 import type { VerifyState } from './render/result';
@@ -28,6 +28,7 @@ import {
   sfxHeroEarned,
   sfxSeal,
   sfxRelic,
+  sfxRelicArrive,
   sfxStep,
   sfxUi,
   isMuted,
@@ -36,7 +37,7 @@ import {
   toggleMuted,
 } from './render/audio';
 import { loadDraft, loadoutOf, type Draft } from './game/draft';
-import { MAX_FLOOR } from './game/floor';
+import { GRID_WIDTH, MAX_FLOOR, TILE_SIZE } from './game/floor';
 import { HEROES, HERO_ORDER } from './game/heroes';
 import { CHARMS, WEAPONS } from './game/items';
 import { cloakFilter } from './render/emblems';
@@ -71,6 +72,8 @@ let chainHeroId: number | null = null;
 let canRetry = false;
 let verifyState: VerifyState = 'pending';
 let runId = 0;
+/** What the HUD counter actually shows: bumps when a relic's travelling point lands, not when it is picked up. */
+let displayedRelics = 0;
 
 const FLOOR_NAMES: Record<number, string> = { 1: 'The Reliquary', 2: 'The Drowned Chapel', 3: 'The Obsidian Crypt' };
 const HEARTBEAT_MS = 1100;
@@ -238,6 +241,7 @@ function planVeteran(hero: Hero): DelverPlan {
 async function beginRun(plan: DelverPlan): Promise<void> {
   if (starting) return;
   starting = true;
+  displayedRelics = 0;
   startStage = 'account';
   const openedAt = performance.now();
   const heroId = HERO_ORDER[plan.loadout.base] ?? 'lantern';
@@ -446,11 +450,27 @@ function handleEvent(event: GameEvent): void {
       sfxEnemyDied();
       triggerShake(120, 5);
       break;
-    case 'relic':
+    case 'relic': {
       spawnPopup(event.x, event.y, '+relic', '#ffca28');
       spawnBurst(event.x, event.y, 'relic');
       sfxRelic(event.kind);
+      const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
+      const startX = offsetX + event.x * TILE_SIZE + TILE_SIZE / 2;
+      const startY = event.y * TILE_SIZE + TILE_SIZE / 2;
+      const counter = document.getElementById('hud-relics');
+      const canvasRect = canvas.getBoundingClientRect();
+      if (counter && canvasRect.width > 0 && canvasRect.height > 0) {
+        // The counter sits below the board in this layout: the point aims at the counter's
+        // live horizontal position but can only ever reach the board's own bottom edge.
+        const counterRect = counter.getBoundingClientRect();
+        const scaleX = canvas.width / canvasRect.width;
+        const scaleY = canvas.height / canvasRect.height;
+        const endX = Math.min(canvas.width, Math.max(0, (counterRect.left + counterRect.width / 2 - canvasRect.left) * scaleX));
+        const endY = Math.min(canvas.height - 4, (counterRect.top - canvasRect.top) * scaleY);
+        spawnRelicTravel(startX, startY, endX, endY, event.kind);
+      }
       break;
+    }
     case 'floorCleared':
       sfxFloorCleared();
       break;
@@ -601,6 +621,19 @@ function frame(): void {
     ctx.fillStyle = '#07080e';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
+  for (const kind of drainArrivedRelics()) {
+    displayedRelics += 1;
+    sfxRelicArrive(kind);
+    if (kind === 'core') {
+      window.setTimeout(() => {
+        const node = document.getElementById('hud-relics');
+        if (!node) return;
+        node.classList.remove('bump');
+        void node.offsetWidth;
+        node.classList.add('bump');
+      }, 140);
+    }
+  }
   syncChrome({
     showCreator,
     showVault,
@@ -632,6 +665,7 @@ function frame(): void {
     showStats,
     leaderboardLoading,
     leaderboardRows,
+    displayRelics: displayedRelics,
     playerAddress,
     run,
     progress,

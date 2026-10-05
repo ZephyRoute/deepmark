@@ -4,7 +4,7 @@ import type { HeroId } from '../game/heroes';
 import type { RelicKind } from '../game/floor';
 import type { RunState } from '../game/state';
 import { punchScale, tick } from './clock';
-import { drawLowHealth, drawParticles, drawPopups, getShakeOffset, isFlashing } from './effects';
+import { drawLowHealth, drawParticles, drawPopups, drawRelicTravel, getShakeOffset, isFlashing } from './effects';
 import { sampleActor, type Clip } from './motion';
 
 const COLOR_BG = '#07080e';
@@ -490,5 +490,6 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
   ctx.fillRect(offsetX, 0, GRID_WIDTH * TILE_SIZE, GRID_HEIGHT * TILE_SIZE);
 
   ctx.restore();
+  drawRelicTravel(ctx);
   drawLowHealth(ctx, run.player.hp / run.player.maxHp);
 }

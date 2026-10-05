@@ -56,6 +56,7 @@ export interface ChromeView {
   showStats: boolean;
   leaderboardLoading: boolean;
   leaderboardRows: LeaderboardRow[] | null;
+  displayRelics: number;
   playerAddress: string;
   run: RunState | null;
   progress: Progress;
@@ -543,7 +544,7 @@ export function syncChrome(view: ChromeView): void {
     setText('floor-label', `Floor ${view.run.floorNumber} / ${MAX_FLOOR}  ${floorName}${practice}`);
     setText('hud-name', view.run.look.name);
     paintHp(view.run.player.hp, view.run.player.maxHp);
-    setBumpText('hud-relics', `Relics ${view.run.relicsThisRun}`);
+    setBumpText('hud-relics', `Relics ${view.displayRelics}`);
     setBumpText('hud-score', `Score ${view.run.scoreThisRun}`);
     setText('hud-mode', view.practice ? 'Practice, not recorded' : '');
     const lastLine = view.run.log[view.run.log.length - 1] ?? '';

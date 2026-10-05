@@ -183,6 +183,12 @@ export function sfxRelic(kind = 'common'): void {
   if (kind === 'core') bell(note * 2, 0.04, 0.2, 1.6);
 }
 
+/** The counter's own chime, on arrival rather than pickup. A core relic adds a lower second beat. */
+export function sfxRelicArrive(kind = 'common'): void {
+  bell(1760, 0.055, 0, 0.9);
+  if (kind === 'core') bell(660, 0.06, 0.1, 1.2);
+}
+
 export function sfxFloorCleared(): void {
   bell(523.3, 0.08, 0, 1.2);
   bell(659.3, 0.07, 0.12, 1.2);
