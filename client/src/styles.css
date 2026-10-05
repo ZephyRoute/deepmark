@@ -1157,6 +1157,8 @@ body:has(#overlay:not([hidden])) .touch {
 .hero-kicker { margin: 0; color: var(--gold); font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; }
 .hero-earned-name { margin: 0 0 6px; font-family: Palatino, "Iowan Old Style", Georgia, serif; font-size: 1.7rem; }
 
+.share-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; animation: rise 500ms ease both; }
+
 .result-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 
 @media (max-width: 520px) {
@@ -1167,7 +1169,7 @@ body:has(#overlay:not([hidden])) .touch {
 @media (prefers-reduced-motion: reduce) {
   .overlay > .panel, .overlay > .title-screen, .overlay > .prompt, .banner, .banner-line, .banner-title,
   .result-eyebrow, .result-title, .result-stat, .ribbon-pip, .chip-rank, .result-hero.is-revealed,
-  .hint-card, .result-loss, .board-row, .board-row.is-fresh .board-rank, .vault-card { animation: none; opacity: 1; }
+  .hint-card, .share-actions, .result-loss, .board-row, .board-row.is-fresh .board-rank, .vault-card { animation: none; opacity: 1; }
   .ribbon.is-pending .ribbon-sweep { animation: none; opacity: 0.6; left: 33%; }
   .bump, .hud-hp.is-low .hp-fill { animation: none; }
   canvas.board-sunk { transition: none; }

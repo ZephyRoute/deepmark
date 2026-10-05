@@ -63,3 +63,29 @@ export function saveDraft(draft: Draft): void {
 export function loadoutOf(draft: Draft): Loadout {
   return { base: draft.base, weapon: draft.weapon, charm: draft.charm, rank: 0 };
 }
+
+export interface Challenge {
+  base: number;
+  weapon: number;
+  charm: number;
+  seed: number;
+}
+
+/**
+ * Reads a shared challenge link's kit and seed from the URL, once. The seed only
+ * ever suggests a practice descent, since a verified run's seed always comes from
+ * the contract, never the client.
+ */
+export function takeChallengeFromUrl(): Challenge | null {
+  const params = new URLSearchParams(location.search);
+  if (!params.has('seed')) return null;
+  const seed = Number(params.get('seed'));
+  const base = Number(params.get('base'));
+  const weapon = Number(params.get('weapon'));
+  const charm = Number(params.get('charm'));
+  history.replaceState(null, '', location.pathname);
+  if (!Number.isFinite(seed) || !inRange(base, HERO_ORDER.length) || !inRange(weapon, WEAPONS.length) || !inRange(charm, CHARMS.length)) {
+    return null;
+  }
+  return { base, weapon, charm, seed };
+}

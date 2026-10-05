@@ -36,8 +36,9 @@ import {
   stopAmbience,
   toggleMuted,
 } from './render/audio';
-import { loadDraft, loadoutOf, type Draft } from './game/draft';
+import { loadDraft, loadoutOf, takeChallengeFromUrl, type Draft } from './game/draft';
 import { noteHintInput, resetHints, showHint } from './render/hints';
+import { challengeUrl, preloadShareAssets, renderShareCard } from './render/shareCard';
 import { MAX_FLOOR } from './game/floor';
 import { HEROES, HERO_ORDER } from './game/heroes';
 import { CHARMS, WEAPONS } from './game/items';
@@ -64,6 +65,16 @@ let relicBalances: RelicBalances | null = null;
 let playerAddress = '';
 
 let draft: Draft = loadDraft();
+let challengeSeed: number | null = null;
+let pendingChallengeDraft = false;
+{
+  const challenge = takeChallengeFromUrl();
+  if (challenge) {
+    draft = { ...draft, base: challenge.base, weapon: challenge.weapon, charm: challenge.charm };
+    challengeSeed = challenge.seed;
+    pendingChallengeDraft = true;
+  }
+}
 let showCreator = false;
 let showVault = false;
 let vaultHeroes: Hero[] | null = null;
@@ -301,7 +312,8 @@ async function beginRun(plan: DelverPlan): Promise<void> {
     resetMotion();
     startAmbience(1);
     showBanner('Floor 1', FLOOR_NAMES[1] ?? '');
-    run = newRun(plan.loadout, undefined, plan.look);
+    run = newRun(plan.loadout, challengeSeed ?? undefined, plan.look);
+    challengeSeed = null;
     practice = true;
   } finally {
     starting = false;
@@ -491,6 +503,10 @@ function handleEvent(event: GameEvent): void {
       sfxExtracted();
       progress = loadProgress();
       runId += 1;
+      if (run) {
+        const heroId = HERO_ORDER[run.loadout.base] ?? 'lantern';
+        preloadShareAssets(HEROES[heroId].veteranArt, run.loadout);
+      }
       if (run && !practice) void verifyOnChain(run);
       break;
     case 'dead':
@@ -505,6 +521,60 @@ function handleEvent(event: GameEvent): void {
     case 'combatStart':
       showHint('combat');
       break;
+  }
+}
+
+function flashShareButton(action: 'shareSave' | 'shareCopy' | 'shareChallenge', label: string): void {
+  const btn = document.querySelector<HTMLButtonElement>(`[data-action="${action}"]`);
+  if (!btn) return;
+  const original = btn.textContent ?? '';
+  btn.textContent = label;
+  window.setTimeout(() => {
+    btn.textContent = original;
+  }, 1600);
+}
+
+async function shareResult(target: RunState, mode: 'save' | 'copy'): Promise<void> {
+  const heroId = HERO_ORDER[target.loadout.base] ?? 'lantern';
+  const blob = await renderShareCard({
+    name: target.look.name,
+    portraitArt: HEROES[heroId].veteranArt,
+    portraitFilter: cloakFilter(target.look.cloak, target.loadout.base),
+    weapon: target.loadout.weapon,
+    charm: target.loadout.charm,
+    floorReached: target.floorNumber,
+    maxFloor: MAX_FLOOR,
+    score: target.scoreThisRun,
+    relics: target.relicsThisRun,
+    rank: chainRank,
+    txHash: chainTx,
+  });
+  if (!blob) return;
+  if (mode === 'copy' && typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      flashShareButton('shareCopy', 'Copied');
+      return;
+    } catch {
+      // Clipboard image writes are not supported everywhere (notably iOS Safari): fall back to a download.
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `deepmark-${target.look.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  flashShareButton(mode === 'copy' ? 'shareCopy' : 'shareSave', 'Saved');
+}
+
+async function copyChallengeLink(target: RunState): Promise<void> {
+  const url = challengeUrl(target.seed, target.loadout);
+  try {
+    await navigator.clipboard.writeText(url);
+    flashShareButton('shareChallenge', 'Copied');
+  } catch {
+    // No clipboard permission: the button simply does not confirm.
   }
 }
 
@@ -590,7 +660,11 @@ onAction((action) => {
 
   if (!run) {
     if (action === 'confirm') {
-      draft = loadDraft();
+      if (pendingChallengeDraft) {
+        pendingChallengeDraft = false;
+      } else {
+        draft = loadDraft();
+      }
       showCreator = true;
     }
     if (action === 'vault') void openVault();
@@ -600,6 +674,7 @@ onAction((action) => {
   }
 
   if (run.mode === 'result') {
+    const resultRun = run;
     if (action === 'confirm') {
       resetMotion();
       run = null;
@@ -609,6 +684,8 @@ onAction((action) => {
       canRetry = false;
     }
     if (action === 'retryVerify' && failedRun) void verifyOnChain(failedRun);
+    if (action === 'shareSave' || action === 'shareCopy') void shareResult(resultRun, action === 'shareCopy' ? 'copy' : 'save');
+    if (action === 'shareChallenge') void copyChallengeLink(resultRun);
     if (action === 'vault') {
       resetMotion();
       run = null;
