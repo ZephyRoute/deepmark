@@ -56,6 +56,7 @@ export interface ChromeView {
   showStats: boolean;
   leaderboardLoading: boolean;
   leaderboardRows: LeaderboardRow[] | null;
+  justVerified: boolean;
   playerAddress: string;
   run: RunState | null;
   progress: Progress;
@@ -278,8 +279,13 @@ function leaderboardCard(view: ChromeView): HTMLElement {
     const table = el('ol', 'board');
     view.leaderboardRows.forEach((row, index) => {
       const mine = row.address === view.playerAddress;
+      const fresh = mine && view.justVerified;
       const item = el('li', mine ? 'board-row is-you' : 'board-row');
-      item.append(el('span', 'board-rank', `${index + 1}`));
+      if (fresh) item.classList.add('is-fresh');
+      item.style.animationDelay = `${index * 60}ms`;
+      const rank = el('span', 'board-rank', `${index + 1}`);
+      if (fresh) rank.style.animationDelay = `${index * 60 + 180}ms`;
+      item.append(rank);
       const who = el('span', 'board-who');
       who.append(emblemIcon(row.emblem, 'emblem emblem-small'));
       who.append(el('span', 'board-name', mine ? `${row.name} (you)` : row.name));
@@ -306,6 +312,9 @@ function leaderboardCard(view: ChromeView): HTMLElement {
 }
 
 function vaultCard(view: ChromeView): HTMLElement {
+  const wrap = el('div', 'vault-view');
+  wrap.append(el('div', 'vault-backdrop'));
+
   const card = el('div', 'panel panel-scroll panel-wide');
   card.append(el('h2', 'panel-title', 'Your vault'));
   card.append(
@@ -322,12 +331,17 @@ function vaultCard(view: ChromeView): HTMLElement {
     card.append(el('p', 'panel-body', 'Empty for now. Clear all three floors with a new delver to claim one.'));
   } else {
     const list = el('div', 'vault-list');
-    for (const hero of view.vaultHeroes) list.append(heroCard(hero, view));
+    view.vaultHeroes.forEach((hero, index) => {
+      const item = heroCard(hero, view);
+      item.style.animationDelay = `${index * 60}ms`;
+      list.append(item);
+    });
     card.append(list);
   }
 
   card.append(button('Back', 'cancel', 'btn'));
-  return card;
+  wrap.append(card);
+  return wrap;
 }
 
 function heroCard(hero: Hero, view: ChromeView): HTMLElement {
@@ -350,11 +364,15 @@ function heroCard(hero: Hero, view: ChromeView): HTMLElement {
     icons.append(icon);
   }
   const rank = Math.min(hero.clears, MAX_RANK);
+  const pips = el('span', 'vault-pips');
+  for (let i = 0; i < MAX_RANK; i += 1) pips.append(el('span', i < rank ? 'vault-pip is-filled' : 'vault-pip'));
+  const rankLine = el('p', 'vault-meta');
+  rankLine.append(pips, document.createTextNode(`Veteran rank ${rank}  ·  ${hero.clears} ${hero.clears === 1 ? 'clear' : 'clears'}`));
   copy.append(
     title,
     el('p', 'vault-kit', kit),
     icons,
-    el('p', 'vault-meta', `Veteran rank ${rank}  ·  ${hero.clears} ${hero.clears === 1 ? 'clear' : 'clears'}`),
+    rankLine,
     el('p', 'vault-meta', `First clear: score ${hero.proof_score}, ${hero.proof_hp_left} HP left, ${hero.proof_actions} moves`)
   );
   const go = el('button', 'btn btn-primary', 'Descend as a veteran');

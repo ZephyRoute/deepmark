@@ -326,12 +326,18 @@ body:has(#overlay:not([hidden])) .touch {
   min-height: 36px;
   padding: 4px 6px;
   border-radius: 8px;
+  animation: rise 240ms ease both;
 }
 
-.board-row.is-you {
-  background: rgba(126, 240, 224, 0.12);
-  color: var(--cyan);
-}
+.board-row.is-you { color: var(--cyan); }
+
+/* The own row, right after it verifies this session: slides in on its own, holds a
+   glow for about two seconds then lets it go, with the rank settling in last. */
+.board-row.is-fresh { animation: board-slide-in 320ms ease both, board-row-glow 2.4s ease forwards; }
+.board-row.is-fresh .board-rank { display: inline-block; animation: rise 240ms ease both; }
+
+@keyframes board-slide-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+@keyframes board-row-glow { 0%, 83% { background: rgba(126, 240, 224, 0.28); } 100% { background: rgba(126, 240, 224, 0); } }
 
 .hud {
   width: min(100%, calc((100dvh - 150px) * 832 / 576));
@@ -565,6 +571,30 @@ body:has(#overlay:not([hidden])) .touch {
 .board-addr { color: var(--muted); font-size: 0.72rem; }
 
 /* Vault */
+.vault-view {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.vault-backdrop {
+  position: absolute;
+  inset: -6%;
+  z-index: 0;
+  background:
+    linear-gradient(180deg, rgba(7, 8, 14, 0.55) 0%, rgba(7, 8, 14, 0.88) 100%),
+    url("/art/vault-bg.webp") center / cover no-repeat;
+  animation: vault-drift 48s ease-in-out infinite alternate;
+}
+
+@keyframes vault-drift { from { transform: scale(1.06); } to { transform: scale(1.14) translate(-1.5%, -1%); } }
+
+.vault-view > .panel-wide { position: relative; z-index: 1; }
+
 .vault-list { display: flex; flex-direction: column; gap: 10px; margin: 8px 0; }
 
 .vault-card {
@@ -576,12 +606,17 @@ body:has(#overlay:not([hidden])) .touch {
   border-radius: 14px;
   border: 1px solid var(--line);
   background: rgba(8, 10, 16, 0.55);
+  animation: rise 240ms ease both;
 }
 
 .vault-card .btn { grid-column: 1 / -1; }
 .vault-portrait { width: 56px; height: 70px; object-fit: contain; object-position: center bottom; }
 .vault-name { display: flex; align-items: center; gap: 6px; margin: 0; font-family: Palatino, "Iowan Old Style", Georgia, serif; font-size: 1.15rem; }
 .vault-kit, .vault-meta { margin: 2px 0 0; font-size: 0.82rem; color: var(--muted); }
+
+.vault-pips { display: inline-flex; gap: 4px; margin-right: 6px; vertical-align: middle; }
+.vault-pip { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: rgba(232, 224, 208, 0.18); border: 1px solid var(--line); }
+.vault-pip.is-filled { background: var(--gold); border-color: rgba(231, 195, 106, 0.6); }
 
 #hud-name { color: var(--gold); }
 
@@ -921,11 +956,14 @@ body:has(#overlay:not([hidden])) .touch {
 
 @media (prefers-reduced-motion: reduce) {
   .overlay > .panel, .overlay > .title-screen, .overlay > .prompt, .banner, .banner-line, .banner-title,
-  .result-eyebrow, .result-title, .result-stat, .ribbon-pip, .chip-rank, .result-hero.is-revealed { animation: none; opacity: 1; }
+  .result-eyebrow, .result-title, .result-stat, .ribbon-pip, .chip-rank, .result-hero.is-revealed,
+  .board-row, .board-row.is-fresh .board-rank, .vault-card { animation: none; opacity: 1; }
   .ribbon.is-pending .ribbon-sweep { animation: none; opacity: 0.6; left: 33%; }
   .ribbon.is-sealed ~ .seal-wrap .seal { animation: none; opacity: 1; transform: rotate(-6deg); }
   .ribbon.is-sealed ~ .seal-wrap .seal-check { animation: none; stroke-dashoffset: 0; }
   .bump, .hud-hp.is-low .hp-fill { animation: none; }
+  .board-row.is-fresh { animation: none; background: rgba(126, 240, 224, 0.28); }
+  .vault-backdrop { animation: none; }
 }
 
 .result [hidden] { display: none !important; }
