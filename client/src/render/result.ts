@@ -80,24 +80,65 @@ function stat(label: string, value: number, suffix: string, delay: number): HTML
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-function sealIcon(): SVGSVGElement {
+function path(d: string, className: string): SVGPathElement {
+  const node = document.createElementNS(SVG_NS, 'path');
+  node.setAttribute('d', d);
+  node.setAttribute('class', className);
+  return node;
+}
+
+/**
+ * The Deepmark sigil: the carved triangle-and-eye mark from the stone logo
+ * (`/art/logo-lockup.webp`), redrawn as an inline vector so the seal is the
+ * game's own mark instead of a generic check-in-a-ring.
+ */
+function sigilIcon(): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 64 64');
   svg.setAttribute('class', 'seal-icon');
   svg.setAttribute('aria-hidden', 'true');
-  const outer = document.createElementNS(SVG_NS, 'circle');
-  outer.setAttribute('cx', '32');
-  outer.setAttribute('cy', '32');
-  outer.setAttribute('r', '29');
-  const inner = document.createElementNS(SVG_NS, 'circle');
-  inner.setAttribute('cx', '32');
-  inner.setAttribute('cy', '32');
-  inner.setAttribute('r', '22');
-  const check = document.createElementNS(SVG_NS, 'path');
-  check.setAttribute('d', 'M20 33l8 8 17-18');
-  check.setAttribute('class', 'seal-check');
-  svg.append(outer, inner, check);
+  const outer = path('M32 9 L53 51 L11 51 Z', 'seal-outer');
+  const inner = path('M23 19 L41 19 L32 31 Z', 'seal-inner');
+  const eye = path('M21 41 Q32 34 43 41 Q32 48 21 41 Z', 'seal-eye');
+  const pupil = document.createElementNS(SVG_NS, 'circle');
+  pupil.setAttribute('cx', '32');
+  pupil.setAttribute('cy', '41');
+  pupil.setAttribute('r', '2.4');
+  pupil.setAttribute('class', 'seal-pupil');
+  svg.append(outer, inner, eye, pupil);
   return svg;
+}
+
+const STRIKE_KEYFRAMES: Keyframe[] = [
+  { opacity: 0, transform: 'scale(1.9) rotate(-14deg) translateY(-6px)' },
+  { opacity: 1, transform: 'scale(0.92) rotate(-4deg) translateY(0)', offset: 0.55 },
+  { opacity: 1, transform: 'scale(1) rotate(-4deg) translateY(0)' },
+];
+
+const DUST_KEYFRAMES: Keyframe[] = [
+  { opacity: 0.6, transform: 'scale(0.6)' },
+  { opacity: 0, transform: 'scale(1.9)' },
+];
+
+const NUDGE_KEYFRAMES: Keyframe[] = [
+  { transform: 'translate(0, 0)' },
+  { transform: 'translate(1px, -1px)' },
+  { transform: 'translate(-1px, 1px)' },
+  { transform: 'translate(0, 0)' },
+];
+
+/** Strikes the seal: sound and the three motions all start on this one call. */
+function strikeSeal(card: HTMLElement, seal: HTMLElement, dust: HTMLElement, onSeal?: () => void): void {
+  onSeal?.();
+  if (reduced()) {
+    seal.style.opacity = '1';
+    seal.style.transform = 'rotate(-4deg)';
+    dust.style.opacity = '0';
+    return;
+  }
+  seal.animate(STRIKE_KEYFRAMES, { duration: 620, easing: 'cubic-bezier(0.2, 1.3, 0.3, 1)', fill: 'forwards' });
+  dust.animate(DUST_KEYFRAMES, { duration: 520, easing: 'ease-out', fill: 'forwards' });
+  card.animate(NUDGE_KEYFRAMES, { duration: 120, easing: 'ease-out' });
 }
 
 let applyVerification: ((v: Verification) => void) | null = null;
@@ -107,7 +148,7 @@ export function updateVerification(v: Verification): void {
   applyVerification?.(v);
 }
 
-export function mountResult(host: HTMLElement, summary: ResultSummary): void {
+export function mountResult(host: HTMLElement, summary: ResultSummary, onSeal?: () => void): void {
   host.replaceChildren();
   const card = el('div', summary.won ? 'panel result result-win' : 'panel result result-loss');
 
@@ -140,9 +181,10 @@ export function mountResult(host: HTMLElement, summary: ResultSummary): void {
     pips.append(pip);
   }
   const sealWrap = el('div', 'seal-wrap');
+  const dust = el('span', 'seal-dust');
   const seal = el('div', 'seal');
-  seal.append(sealIcon());
-  sealWrap.append(seal);
+  seal.append(sigilIcon());
+  sealWrap.append(dust, seal);
   ribbon.append(track, pips);
   card.append(ribbon, sealWrap);
 
@@ -212,6 +254,7 @@ export function mountResult(host: HTMLElement, summary: ResultSummary): void {
       if (!sealed) {
         sealed = true;
         ribbon.classList.add('is-sealed');
+        strikeSeal(card, seal, dust, onSeal);
       }
     } else {
       story.textContent = v.message;
