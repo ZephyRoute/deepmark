@@ -297,9 +297,9 @@ export function sfxExtracted(): void {
   bell(1046.5, 0.07, 0.46, 2.2);
 }
 
+/** A single low note, not a fanfare: the depths close over the run, nothing more. */
 export function sfxDead(): void {
-  burst({ duration: 0.8, type: 'lowpass', from: 700, to: 60, gain: 0.2 });
-  thump({ from: 150, to: 32, duration: 0.9, gain: 0.34, type: 'sawtooth' });
+  thump({ from: 110, to: 38, duration: 1.1, gain: 0.26, type: 'sine' });
 }
 
 export function sfxBossIntro(): void {

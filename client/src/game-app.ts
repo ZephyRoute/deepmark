@@ -12,6 +12,7 @@ import {
 } from './render/chrome';
 import { drainArrivedRelics, flashActor, resetRelicTravel, spawnBurst, spawnPopup, spawnRelicTravel, triggerShake } from './render/effects';
 import { showBanner } from './render/banner';
+import { playBossIntro, preloadBossArt, type BossIntroHandle } from './render/bossIntro';
 import { hitStop, punch } from './render/clock';
 import type { VerifyState } from './render/result';
 import {
@@ -92,6 +93,7 @@ let practice = false;
 let leaderboardLoading = false;
 let leaderboardRows: LeaderboardRow[] | null = null;
 let chainRead: ChainRead = 'loading';
+let bossIntro: BossIntroHandle | null = null;
 
 /** Waiting longer than this for the chain to open a run falls back to a practice run. */
 const START_TIMEOUT_MS = 50_000;
@@ -245,6 +247,7 @@ async function beginRun(plan: DelverPlan): Promise<void> {
   starting = true;
   displayedRelics = 0;
   resetRelicTravel();
+  canvas.classList.remove('board-sunk');
   startStage = 'account';
   const openedAt = performance.now();
   const heroId = HERO_ORDER[plan.loadout.base] ?? 'lantern';
@@ -476,18 +479,30 @@ function handleEvent(event: GameEvent): void {
     }
     case 'floorCleared':
       sfxFloorCleared();
+      if (run && run.floorNumber === MAX_FLOOR - 1) preloadBossArt();
       break;
     case 'descended':
       resetMotion();
       sfxDescend();
       startAmbience(event.floor);
-      showBanner(
-        `Floor ${event.floor}`,
-        event.floor >= MAX_FLOOR ? 'The Obsidian Crypt. Warden Prime waits.' : FLOOR_NAMES[event.floor] ?? '',
-        event.floor >= MAX_FLOOR ? 'boss' : 'floor'
-      );
-      if (event.floor >= MAX_FLOOR) sfxBossIntro();
-      else sfxBanner();
+      if (event.floor >= MAX_FLOOR) {
+        const stage = document.querySelector<HTMLElement>('.stage');
+        if (stage) {
+          bossIntro = playBossIntro(
+            stage,
+            'Warden Prime',
+            () => sfxBossIntro(),
+            () => {
+              bossIntro = null;
+            }
+          );
+        } else {
+          sfxBossIntro();
+        }
+      } else {
+        showBanner(`Floor ${event.floor}`, FLOOR_NAMES[event.floor] ?? '', 'floor');
+        sfxBanner();
+      }
       break;
     case 'extracted':
       stopAmbience();
@@ -500,6 +515,7 @@ function handleEvent(event: GameEvent): void {
       stopAmbience();
       sfxDead();
       triggerShake(250, 10);
+      canvas.classList.add('board-sunk');
       progress = loadProgress();
       runId += 1;
       if (run && !practice) void verifyOnChain(run);
@@ -573,6 +589,11 @@ onAction((action) => {
 
   if (starting) return;
 
+  if (bossIntro) {
+    bossIntro.skip();
+    return;
+  }
+
   if (showCreator) {
     if (action === 'cancel') showCreator = false;
     return;
@@ -643,8 +664,9 @@ function frame(): void {
       sfxHeartbeat();
     }
   }
+  const sunkDefeat = run && run.mode === 'result' && run.resultKind !== 'extracted' && !showLeaderboard && !showStats;
   if (run && !showLeaderboard && !showStats && run.mode !== 'result') drawWorld(ctx, run);
-  else {
+  else if (!sunkDefeat) {
     ctx.fillStyle = '#07080e';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
