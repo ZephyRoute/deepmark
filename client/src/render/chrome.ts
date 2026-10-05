@@ -70,6 +70,8 @@ export interface ChromeView {
   startStage: DescentStage;
   descent: DescentOptions | null;
   practice: boolean;
+  /** Fired once, synchronously with the seal's strike animation, when a run is verified. */
+  onSeal: () => void;
 }
 
 const TX_HASH = /^[a-f0-9]{64}$/;
@@ -189,7 +191,7 @@ function renderOverlay(view: ChromeView): void {
 
   if (view.run.mode === 'result') {
     overlay.hidden = false;
-    mountResult(overlay, resultSummary(view));
+    mountResult(overlay, resultSummary(view), view.onSeal);
     return;
   }
 

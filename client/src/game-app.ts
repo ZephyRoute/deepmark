@@ -378,7 +378,6 @@ async function verifyOnChain(finished: RunState): Promise<void> {
   chainStatus = agrees ? 'Verified on Stellar' : 'Verified on Stellar (this browser disagreed, the chain result stands)';
   verifyState = 'verified';
   justVerifiedUntil = performance.now() + 4000;
-  sfxSeal();
   if (chainHeroId !== null) window.setTimeout(sfxHeroEarned, 900);
 
   // The run is settled. Anything below only decorates the result screen, so a
@@ -649,6 +648,7 @@ function frame(): void {
     startStage,
     descent,
     practice,
+    onSeal: sfxSeal,
   });
   requestAnimationFrame(frame);
 }
