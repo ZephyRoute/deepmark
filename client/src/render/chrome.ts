@@ -8,6 +8,7 @@ import { CHARMS, WEAPONS } from '../game/items';
 import { MAX_RANK } from '../game/loadout';
 import { STELLAR_CONFIG } from '../stellar/config';
 import type { Hero } from '../stellar/contract';
+import { getAmbienceVolume, getFxVolume, setAmbienceVolume, setFxVolume } from './audio';
 import { mountCreator, type CreatorHooks } from './creator';
 import { cloakFilter, emblemIcon } from './emblems';
 import { mountResult, updateVerification, type ResultSummary, type Verification, type VerifyState } from './result';
@@ -463,8 +464,28 @@ function statsCard(view: ChromeView): HTMLElement {
   }
   card.append(chain);
 
+  const sound = el('section', 'metric-group');
+  sound.append(el('h3', 'metric-heading', 'Sound'));
+  sound.append(volumeSlider('Effects', getFxVolume(), setFxVolume));
+  sound.append(volumeSlider('Ambience', getAmbienceVolume(), setAmbienceVolume));
+  card.append(sound);
+
   card.append(button('Back', 'cancel', 'btn'));
   return card;
+}
+
+function volumeSlider(label: string, value: number, onChange: (value: number) => void): HTMLElement {
+  const row = el('label', 'volume-row');
+  row.append(el('span', 'volume-label', label));
+  const input = el('input', 'volume-input');
+  input.type = 'range';
+  input.min = '0';
+  input.max = '1';
+  input.step = '0.05';
+  input.value = String(value);
+  input.addEventListener('input', () => onChange(Number(input.value)));
+  row.append(input);
+  return row;
 }
 
 function combatCard(run: RunState): HTMLElement {
