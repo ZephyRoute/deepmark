@@ -12,6 +12,7 @@ import {
 } from './render/chrome';
 import { flashActor, spawnBurst, spawnPopup, triggerShake } from './render/effects';
 import { showBanner } from './render/banner';
+import { playBossIntro, preloadBossArt, type BossIntroHandle } from './render/bossIntro';
 import { hitStop, punch } from './render/clock';
 import type { VerifyState } from './render/result';
 import {
@@ -89,6 +90,7 @@ let practice = false;
 let leaderboardLoading = false;
 let leaderboardRows: LeaderboardRow[] | null = null;
 let chainRead: ChainRead = 'loading';
+let bossIntro: BossIntroHandle | null = null;
 
 /** Waiting longer than this for the chain to open a run falls back to a practice run. */
 const START_TIMEOUT_MS = 50_000;
@@ -456,18 +458,30 @@ function handleEvent(event: GameEvent): void {
       break;
     case 'floorCleared':
       sfxFloorCleared();
+      if (run && run.floorNumber === MAX_FLOOR - 1) preloadBossArt();
       break;
     case 'descended':
       resetMotion();
       sfxDescend();
       startAmbience(event.floor);
-      showBanner(
-        `Floor ${event.floor}`,
-        event.floor >= MAX_FLOOR ? 'The Obsidian Crypt. Warden Prime waits.' : FLOOR_NAMES[event.floor] ?? '',
-        event.floor >= MAX_FLOOR ? 'boss' : 'floor'
-      );
-      if (event.floor >= MAX_FLOOR) sfxBossIntro();
-      else sfxBanner();
+      if (event.floor >= MAX_FLOOR) {
+        const stage = document.querySelector<HTMLElement>('.stage');
+        if (stage) {
+          bossIntro = playBossIntro(
+            stage,
+            'Warden Prime',
+            () => sfxBossIntro(),
+            () => {
+              bossIntro = null;
+            }
+          );
+        } else {
+          sfxBossIntro();
+        }
+      } else {
+        showBanner(`Floor ${event.floor}`, FLOOR_NAMES[event.floor] ?? '', 'floor');
+        sfxBanner();
+      }
       break;
     case 'extracted':
       stopAmbience();
@@ -553,6 +567,11 @@ onAction((action) => {
   }
 
   if (starting) return;
+
+  if (bossIntro) {
+    bossIntro.skip();
+    return;
+  }
 
   if (showCreator) {
     if (action === 'cancel') showCreator = false;
