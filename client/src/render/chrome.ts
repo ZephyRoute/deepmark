@@ -490,7 +490,9 @@ function statsCard(view: ChromeView): HTMLElement {
   sound.append(volumeSlider('Ambience', getAmbienceVolume(), setAmbienceVolume));
   card.append(sound);
 
-  card.append(button('Back', 'cancel', 'btn'));
+  const actions = el('div', 'result-actions');
+  actions.append(button('Replay hints', 'replayHints', 'btn'), button('Back', 'cancel', 'btn'));
+  card.append(actions);
   return card;
 }
 

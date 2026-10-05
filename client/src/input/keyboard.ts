@@ -14,6 +14,7 @@ export type Action =
   | 'tabVeteran'
   | 'pickLantern'
   | 'pickCinder'
+  | 'replayHints'
   | 'shareSave'
   | 'shareCopy'
   | 'shareChallenge';
@@ -52,6 +53,7 @@ const ACTIONS: readonly Action[] = [
   'tabVeteran',
   'pickLantern',
   'pickCinder',
+  'replayHints',
   'shareSave',
   'shareCopy',
   'shareChallenge',

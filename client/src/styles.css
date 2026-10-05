@@ -103,6 +103,39 @@ canvas.board-sunk {
   transform: translateY(6px);
 }
 
+/* First run guidance: a quiet card at a corner of the board. It never captures
+   a click or tap, since it dismisses on the input it is teaching, not on itself. */
+.hint-card {
+  position: absolute;
+  z-index: 4;
+  left: 10px;
+  bottom: 10px;
+  max-width: min(78%, 280px);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-raise);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+  animation: rise 400ms ease both;
+}
+
+.hint-card[hidden] { display: none; }
+
+.hint-title {
+  margin: 0 0 2px;
+  color: var(--cyan);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+}
+
+.hint-body {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
 .overlay {
   position: fixed;
   inset: 0;
@@ -1136,7 +1169,7 @@ body:has(#overlay:not([hidden])) .touch {
 @media (prefers-reduced-motion: reduce) {
   .overlay > .panel, .overlay > .title-screen, .overlay > .prompt, .banner, .banner-line, .banner-title,
   .result-eyebrow, .result-title, .result-stat, .ribbon-pip, .chip-rank, .result-hero.is-revealed,
-  .share-actions, .result-loss, .board-row, .board-row.is-fresh .board-rank, .vault-card { animation: none; opacity: 1; }
+  .hint-card, .share-actions, .result-loss, .board-row, .board-row.is-fresh .board-rank, .vault-card { animation: none; opacity: 1; }
   .ribbon.is-pending .ribbon-sweep { animation: none; opacity: 0.6; left: 33%; }
   .bump, .hud-hp.is-low .hp-fill { animation: none; }
   canvas.board-sunk { transition: none; }

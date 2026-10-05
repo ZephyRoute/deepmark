@@ -38,6 +38,7 @@ import {
   toggleMuted,
 } from './render/audio';
 import { loadDraft, loadoutOf, takeChallengeFromUrl, type Draft } from './game/draft';
+import { noteHintInput, resetHints, showHint } from './render/hints';
 import { challengeUrl, preloadShareAssets, renderShareCard } from './render/shareCard';
 import { GRID_WIDTH, MAX_FLOOR, TILE_SIZE } from './game/floor';
 import { HEROES, HERO_ORDER } from './game/heroes';
@@ -323,6 +324,7 @@ async function beginRun(plan: DelverPlan): Promise<void> {
     starting = false;
     descent = null;
   }
+  showHint('move');
 }
 
 /** Sends the action log. The contract replays it and decides the result. */
@@ -491,6 +493,7 @@ function handleEvent(event: GameEvent): void {
     }
     case 'floorCleared':
       sfxFloorCleared();
+      showHint('choice');
       if (run && run.floorNumber === MAX_FLOOR - 1) preloadBossArt();
       break;
     case 'descended':
@@ -537,6 +540,7 @@ function handleEvent(event: GameEvent): void {
       if (run && !practice) void verifyOnChain(run);
       break;
     case 'combatStart':
+      showHint('combat');
       break;
   }
 }
@@ -645,6 +649,7 @@ onAction((action) => {
   if (!run) sfxUi();
   if (showStats) {
     if (action === 'stats' || action === 'cancel') showStats = false;
+    if (action === 'replayHints') resetHints();
     return;
   }
 
@@ -717,15 +722,18 @@ onAction((action) => {
   if (run.mode === 'combat') {
     if (action === 'confirm') applyAction(run, ActionCode.Attack);
     if (action === 'cancel') applyAction(run, ActionCode.Retreat);
+    noteHintInput(action);
   } else if (run.mode === 'choice') {
     if (action === 'confirm') applyAction(run, ActionCode.Descend);
     if (action === 'cancel') applyAction(run, ActionCode.Extract);
+    noteHintInput(action);
   } else {
     const dir = DIRS[action];
     if (dir) {
       if (dir[0] !== 0) face(dir[0] < 0 ? -1 : 1);
       const moved = applyAction(run, MOVE_CODES[action as keyof typeof MOVE_CODES]);
       if (moved && run.mode === 'explore') sfxStep();
+      noteHintInput(action);
     }
   }
 
