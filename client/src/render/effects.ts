@@ -210,3 +210,14 @@ export function drainArrivedRelics(): RelicKind[] {
   arrived = [];
   return out;
 }
+
+/**
+ * Drops any travel still in flight when a run ends: `drawWorld` (and so
+ * `drawRelicTravel`) stops being called once the result screen takes over, so a
+ * pickup from the last instant of a run would otherwise freeze mid-air and then
+ * "arrive" on the very first frame of the next run, phantom-crediting its counter.
+ */
+export function resetRelicTravel(): void {
+  travels = [];
+  arrived = [];
+}

@@ -10,7 +10,7 @@ import {
   type LeaderboardRow,
   type OnchainSnapshot,
 } from './render/chrome';
-import { drainArrivedRelics, flashActor, spawnBurst, spawnPopup, spawnRelicTravel, triggerShake } from './render/effects';
+import { drainArrivedRelics, flashActor, resetRelicTravel, spawnBurst, spawnPopup, spawnRelicTravel, triggerShake } from './render/effects';
 import { showBanner } from './render/banner';
 import { hitStop, punch } from './render/clock';
 import type { VerifyState } from './render/result';
@@ -242,6 +242,7 @@ async function beginRun(plan: DelverPlan): Promise<void> {
   if (starting) return;
   starting = true;
   displayedRelics = 0;
+  resetRelicTravel();
   startStage = 'account';
   const openedAt = performance.now();
   const heroId = HERO_ORDER[plan.loadout.base] ?? 'lantern';
