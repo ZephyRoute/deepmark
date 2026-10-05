@@ -303,6 +303,25 @@ body:has(#overlay:not([hidden])) .touch {
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.volume-label {
+  width: 72px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.volume-input {
+  flex: 1;
+  accent-color: var(--cyan);
+}
+
 .board-head, .board-row {
   display: grid;
   grid-template-columns: 24px 1fr 40px 40px 30px 46px;
