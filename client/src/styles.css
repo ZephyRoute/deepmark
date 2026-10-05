@@ -230,6 +230,48 @@ body:has(#overlay:not([hidden])) .touch {
   font-size: 1.05rem;
 }
 
+/* The bank-or-push prompt: exactly what is at stake, nothing the player could not already work out. */
+.choice-stake {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 0;
+}
+
+.choice-hp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.choice-hp-text {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.86rem;
+}
+
+.choice-relics {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.choice-relic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.86rem;
+}
+
+.choice-relic-icon { width: 20px; height: 20px; object-fit: contain; }
+
+.choice-score {
+  margin-left: auto;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.86rem;
+}
+
 .new-best {
   margin: 0;
   color: var(--gold);

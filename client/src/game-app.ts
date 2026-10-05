@@ -486,6 +486,30 @@ function handleEvent(event: GameEvent): void {
   }
 }
 
+/** Hovering Descend on the bank-or-push prompt: the heartbeat quickens the longer it holds. */
+let descendHovering = false;
+let descendHoverTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleDescendBeat(delay: number): void {
+  descendHoverTimer = setTimeout(() => {
+    if (!descendHovering) return;
+    sfxHeartbeat();
+    scheduleDescendBeat(Math.max(220, delay * 0.82));
+  }, delay);
+}
+
+function onDescendHover(hovering: boolean): void {
+  if (hovering === descendHovering) return;
+  descendHovering = hovering;
+  if (hovering) {
+    sfxHeartbeat();
+    scheduleDescendBeat(650);
+  } else if (descendHoverTimer) {
+    clearTimeout(descendHoverTimer);
+    descendHoverTimer = null;
+  }
+}
+
 const MOVE_CODES = {
   up: ActionCode.Up,
   down: ActionCode.Down,
@@ -645,7 +669,9 @@ function frame(): void {
     startStage,
     descent,
     practice,
+    onDescendHover,
   });
+  if (run?.mode !== 'choice' && descendHovering) onDescendHover(false);
   requestAnimationFrame(frame);
 }
 
