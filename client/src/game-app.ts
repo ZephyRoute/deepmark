@@ -10,7 +10,7 @@ import {
   type LeaderboardRow,
   type OnchainSnapshot,
 } from './render/chrome';
-import { flashActor, spawnBurst, spawnPopup, triggerShake } from './render/effects';
+import { drainArrivedRelics, flashActor, resetRelicTravel, spawnBurst, spawnPopup, spawnRelicTravel, triggerShake } from './render/effects';
 import { showBanner } from './render/banner';
 import { playBossIntro, preloadBossArt, type BossIntroHandle } from './render/bossIntro';
 import { hitStop, punch } from './render/clock';
@@ -29,6 +29,7 @@ import {
   sfxHeroEarned,
   sfxSeal,
   sfxRelic,
+  sfxRelicArrive,
   sfxStep,
   sfxUi,
   isMuted,
@@ -38,7 +39,7 @@ import {
 } from './render/audio';
 import { loadDraft, loadoutOf, takeChallengeFromUrl, type Draft } from './game/draft';
 import { challengeUrl, preloadShareAssets, renderShareCard } from './render/shareCard';
-import { MAX_FLOOR } from './game/floor';
+import { GRID_WIDTH, MAX_FLOOR, TILE_SIZE } from './game/floor';
 import { HEROES, HERO_ORDER } from './game/heroes';
 import { CHARMS, WEAPONS } from './game/items';
 import { cloakFilter } from './render/emblems';
@@ -83,6 +84,8 @@ let chainHeroId: number | null = null;
 let canRetry = false;
 let verifyState: VerifyState = 'pending';
 let runId = 0;
+/** What the HUD counter actually shows: bumps when a relic's travelling point lands, not when it is picked up. */
+let displayedRelics = 0;
 /** Set only when a run verifies this session, so the leaderboard's own-row glow never shows on a cold load. */
 let justVerifiedUntil = 0;
 
@@ -253,6 +256,8 @@ function planVeteran(hero: Hero): DelverPlan {
 async function beginRun(plan: DelverPlan): Promise<void> {
   if (starting) return;
   starting = true;
+  displayedRelics = 0;
+  resetRelicTravel();
   canvas.classList.remove('board-sunk');
   startStage = 'account';
   const openedAt = performance.now();
@@ -463,11 +468,27 @@ function handleEvent(event: GameEvent): void {
       sfxEnemyDied();
       triggerShake(120, 5);
       break;
-    case 'relic':
+    case 'relic': {
       spawnPopup(event.x, event.y, '+relic', '#ffca28');
       spawnBurst(event.x, event.y, 'relic');
       sfxRelic(event.kind);
+      const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
+      const startX = offsetX + event.x * TILE_SIZE + TILE_SIZE / 2;
+      const startY = event.y * TILE_SIZE + TILE_SIZE / 2;
+      const counter = document.getElementById('hud-relics');
+      const canvasRect = canvas.getBoundingClientRect();
+      if (counter && canvasRect.width > 0 && canvasRect.height > 0) {
+        // The counter sits below the board in this layout: the point aims at the counter's
+        // live horizontal position but can only ever reach the board's own bottom edge.
+        const counterRect = counter.getBoundingClientRect();
+        const scaleX = canvas.width / canvasRect.width;
+        const scaleY = canvas.height / canvasRect.height;
+        const endX = Math.min(canvas.width, Math.max(0, (counterRect.left + counterRect.width / 2 - canvasRect.left) * scaleX));
+        const endY = Math.min(canvas.height - 4, (counterRect.top - canvasRect.top) * scaleY);
+        spawnRelicTravel(startX, startY, endX, endY, event.kind);
+      }
       break;
+    }
     case 'floorCleared':
       sfxFloorCleared();
       if (run && run.floorNumber === MAX_FLOOR - 1) preloadBossArt();
@@ -726,6 +747,19 @@ function frame(): void {
     ctx.fillStyle = '#07080e';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
+  for (const kind of drainArrivedRelics()) {
+    displayedRelics += 1;
+    sfxRelicArrive(kind);
+    if (kind === 'core') {
+      window.setTimeout(() => {
+        const node = document.getElementById('hud-relics');
+        if (!node) return;
+        node.classList.remove('bump');
+        void node.offsetWidth;
+        node.classList.add('bump');
+      }, 140);
+    }
+  }
   syncChrome({
     showCreator,
     showVault,
@@ -757,6 +791,7 @@ function frame(): void {
     showStats,
     leaderboardLoading,
     leaderboardRows,
+    displayRelics: displayedRelics,
     justVerified: performance.now() < justVerifiedUntil,
     playerAddress,
     run,

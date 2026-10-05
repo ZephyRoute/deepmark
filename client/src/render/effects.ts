@@ -1,4 +1,5 @@
 import { now as clockNow } from './clock';
+import type { RelicKind } from '../game/floor';
 
 interface DamagePopup {
   x: number;
@@ -158,4 +159,65 @@ export function drawLowHealth(ctx: CanvasRenderingContext2D, ratio: number): voi
   g.addColorStop(1, `rgba(255, 60, 50, ${alpha})`);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
+}
+
+// ---- relic travel: a single point flying from the pickup to the HUD counter ----
+
+interface RelicTravel {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  kind: RelicKind;
+  start: number;
+}
+
+const TRAVEL_MS = 380;
+const TRAVEL_COLOR: Record<RelicKind, string> = { common: '#e7c36a', rare: '#9be8da', core: '#fff1b8' };
+
+let travels: RelicTravel[] = [];
+let arrived: RelicKind[] = [];
+
+/** One point, from a relic's canvas position to wherever the HUD counter sits right now. */
+export function spawnRelicTravel(x0: number, y0: number, x1: number, y1: number, kind: RelicKind): void {
+  travels.push({ x0, y0, x1, y1, kind, start: clockNow() });
+}
+
+/** Draws every travelling point still in flight, one draw call each, and queues arrivals. */
+export function drawRelicTravel(ctx: CanvasRenderingContext2D): void {
+  const now = clockNow();
+  travels = travels.filter((t) => {
+    const p = (now - t.start) / TRAVEL_MS;
+    if (p >= 1) {
+      arrived.push(t.kind);
+      return false;
+    }
+    const eased = 1 - Math.pow(1 - p, 3);
+    const x = t.x0 + (t.x1 - t.x0) * eased;
+    const lift = Math.sin(p * Math.PI) * -26;
+    const y = t.y0 + (t.y1 - t.y0) * eased + lift;
+    ctx.fillStyle = TRAVEL_COLOR[t.kind];
+    ctx.beginPath();
+    ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    return true;
+  });
+}
+
+/** The relic kinds whose travelling point landed since the last call. */
+export function drainArrivedRelics(): RelicKind[] {
+  const out = arrived;
+  arrived = [];
+  return out;
+}
+
+/**
+ * Drops any travel still in flight when a run ends: `drawWorld` (and so
+ * `drawRelicTravel`) stops being called once the result screen takes over, so a
+ * pickup from the last instant of a run would otherwise freeze mid-air and then
+ * "arrive" on the very first frame of the next run, phantom-crediting its counter.
+ */
+export function resetRelicTravel(): void {
+  travels = [];
+  arrived = [];
 }
