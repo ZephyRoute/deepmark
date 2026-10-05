@@ -71,6 +71,8 @@ let chainHeroId: number | null = null;
 let canRetry = false;
 let verifyState: VerifyState = 'pending';
 let runId = 0;
+/** Set only when a run verifies this session, so the leaderboard's own-row glow never shows on a cold load. */
+let justVerifiedUntil = 0;
 
 const FLOOR_NAMES: Record<number, string> = { 1: 'The Reliquary', 2: 'The Drowned Chapel', 3: 'The Obsidian Crypt' };
 const HEARTBEAT_MS = 1100;
@@ -376,6 +378,7 @@ async function verifyOnChain(finished: RunState): Promise<void> {
   if (!agrees) console.error('Deepmark: the contract result differs from the local simulation', outcome);
   chainStatus = agrees ? 'Verified on Stellar' : 'Verified on Stellar (this browser disagreed, the chain result stands)';
   verifyState = 'verified';
+  justVerifiedUntil = performance.now() + 4000;
   if (chainHeroId !== null) window.setTimeout(sfxHeroEarned, 900);
 
   // The run is settled. Anything below only decorates the result screen, so a
@@ -484,6 +487,30 @@ function handleEvent(event: GameEvent): void {
       break;
     case 'combatStart':
       break;
+  }
+}
+
+/** Hovering Descend on the bank-or-push prompt: the heartbeat quickens the longer it holds. */
+let descendHovering = false;
+let descendHoverTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleDescendBeat(delay: number): void {
+  descendHoverTimer = setTimeout(() => {
+    if (!descendHovering) return;
+    sfxHeartbeat();
+    scheduleDescendBeat(Math.max(220, delay * 0.82));
+  }, delay);
+}
+
+function onDescendHover(hovering: boolean): void {
+  if (hovering === descendHovering) return;
+  descendHovering = hovering;
+  if (hovering) {
+    sfxHeartbeat();
+    scheduleDescendBeat(650);
+  } else if (descendHoverTimer) {
+    clearTimeout(descendHoverTimer);
+    descendHoverTimer = null;
   }
 }
 
@@ -634,6 +661,7 @@ function frame(): void {
     showStats,
     leaderboardLoading,
     leaderboardRows,
+    justVerified: performance.now() < justVerifiedUntil,
     playerAddress,
     run,
     progress,
@@ -647,8 +675,10 @@ function frame(): void {
     startStage,
     descent,
     practice,
+    onDescendHover,
     onSeal: sfxSeal,
   });
+  if (run?.mode !== 'choice' && descendHovering) onDescendHover(false);
   requestAnimationFrame(frame);
 }
 

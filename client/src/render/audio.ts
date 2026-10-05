@@ -4,12 +4,22 @@
  * hits with a little variation each time, and bell tones for relics.
  */
 const MUTE_KEY = 'deepmark:muted:v1';
+const FX_VOLUME_KEY = 'deepmark:vol:fx:v1';
+const AMBIENCE_VOLUME_KEY = 'deepmark:vol:ambience:v1';
 const MASTER_LEVEL = 0.9;
+/** A ceremony sound ducks the ambience by about 6 dB for its length. */
+const DUCK_FACTOR = Math.pow(10, -6 / 20);
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
+let limiter: DynamicsCompressorNode | null = null;
+let fxGain: GainNode | null = null;
+let ambienceGain: GainNode | null = null;
+let duckGain: GainNode | null = null;
 let noiseBuffer: AudioBuffer | null = null;
 let muted = readMuted();
+let fxVolume = readVolume(FX_VOLUME_KEY);
+let ambienceVolume = readVolume(AMBIENCE_VOLUME_KEY);
 
 function readMuted(): boolean {
   try {
@@ -19,17 +29,53 @@ function readMuted(): boolean {
   }
 }
 
+function readVolume(key: string): number {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return 1;
+    const value = Number(raw);
+    return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
+  } catch {
+    return 1;
+  }
+}
+
+/**
+ * fx and ambience each get their own user-adjustable gain, both feeding a duck
+ * stage (ceremony sounds pull the ambience side down) and then the shared
+ * master mute, through one limiter so simultaneous sounds never clip.
+ */
 function getContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!ctx) {
     const Ctor = window.AudioContext;
     if (!Ctor) return null;
     ctx = new Ctor();
-    const compressor = ctx.createDynamicsCompressor();
+    const t = ctx.currentTime;
+
+    limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.setValueAtTime(-6, t);
+    limiter.knee.setValueAtTime(4, t);
+    limiter.ratio.setValueAtTime(16, t);
+    limiter.attack.setValueAtTime(0.003, t);
+    limiter.release.setValueAtTime(0.25, t);
+    limiter.connect(ctx.destination);
+
     master = ctx.createGain();
     master.gain.value = muted ? 0 : MASTER_LEVEL;
-    master.connect(compressor);
-    compressor.connect(ctx.destination);
+    master.connect(limiter);
+
+    duckGain = ctx.createGain();
+    duckGain.gain.value = 1;
+    duckGain.connect(master);
+
+    fxGain = ctx.createGain();
+    fxGain.gain.value = fxVolume;
+    fxGain.connect(master);
+
+    ambienceGain = ctx.createGain();
+    ambienceGain.gain.value = ambienceVolume;
+    ambienceGain.connect(duckGain);
   }
   if (ctx.state === 'suspended') void ctx.resume();
   return ctx;
@@ -37,7 +83,22 @@ function getContext(): AudioContext | null {
 
 function out(): AudioNode | null {
   getContext();
-  return master;
+  return fxGain;
+}
+
+function ambienceOut(): AudioNode | null {
+  getContext();
+  return ambienceGain;
+}
+
+/** Pulls the ambience down by about 6 dB for `ms`, then lets it settle back. */
+function duckAmbience(ms: number): void {
+  const audio = getContext();
+  if (!audio || !duckGain) return;
+  const now = audio.currentTime;
+  duckGain.gain.cancelScheduledValues(now);
+  duckGain.gain.setTargetAtTime(DUCK_FACTOR, now, 0.02);
+  duckGain.gain.setTargetAtTime(1, now + ms / 1000, 0.25);
 }
 
 export function isMuted(): boolean {
@@ -54,6 +115,36 @@ export function toggleMuted(): boolean {
   const audio = getContext();
   if (audio && master) master.gain.setTargetAtTime(muted ? 0 : MASTER_LEVEL, audio.currentTime, 0.05);
   return muted;
+}
+
+export function getFxVolume(): number {
+  return fxVolume;
+}
+
+export function getAmbienceVolume(): number {
+  return ambienceVolume;
+}
+
+export function setFxVolume(value: number): void {
+  fxVolume = Math.min(1, Math.max(0, value));
+  try {
+    localStorage.setItem(FX_VOLUME_KEY, String(fxVolume));
+  } catch {
+    // The choice still holds for this tab.
+  }
+  const audio = getContext();
+  if (audio && fxGain) fxGain.gain.setTargetAtTime(fxVolume, audio.currentTime, 0.05);
+}
+
+export function setAmbienceVolume(value: number): void {
+  ambienceVolume = Math.min(1, Math.max(0, value));
+  try {
+    localStorage.setItem(AMBIENCE_VOLUME_KEY, String(ambienceVolume));
+  } catch {
+    // The choice still holds for this tab.
+  }
+  const audio = getContext();
+  if (audio && ambienceGain) ambienceGain.gain.setTargetAtTime(ambienceVolume, audio.currentTime, 0.05);
 }
 
 function noise(audio: AudioContext): AudioBuffer {
@@ -131,9 +222,9 @@ function thump(p: Thump): void {
 }
 
 /** A struck bell: a few inharmonic partials with a long decay. */
-function bell(freq: number, gainLevel: number, delay = 0, decay = 1.1): void {
+function bell(freq: number, gainLevel: number, delay = 0, decay = 1.1, destination?: AudioNode | null): void {
   const audio = getContext();
-  const dest = out();
+  const dest = destination ?? out();
   if (!audio || !dest) return;
   const t = audio.currentTime + delay;
   for (const [ratio, level] of [[1, 1], [2.76, 0.45], [5.4, 0.2]] as const) {
@@ -248,7 +339,7 @@ const FLOOR_BEDS: Record<number, { root: number; tension: number; air: number }>
 
 function makeBed(floor: number): Bed | null {
   const audio = getContext();
-  const dest = out();
+  const dest = ambienceOut();
   if (!audio || !dest) return null;
   const spec = FLOOR_BEDS[floor] ?? FLOOR_BEDS[1];
   if (!spec) return null;
@@ -320,15 +411,47 @@ function makeBed(floor: number): Bed | null {
   };
 }
 
+// ---- sparse bed: a few notes per floor, never on the same clock twice ----
+
+/** Three or four notes per floor, a hand-picked set rather than a scale rule. */
+const FLOOR_NOTES: Record<number, readonly number[]> = {
+  1: [220, 261.63, 329.63, 392],
+  2: [196, 233.08, 293.66, 349.23],
+  3: [164.81, 195.998, 246.94, 293.66],
+};
+const BED_NOTE_GAIN = 0.045;
+const BED_NOTE_DECAY = 3.4;
+const BED_NOTE_MIN_MS = 3800;
+const BED_NOTE_SPAN_MS = 5200;
+
+let bedNoteTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleBedNote(floor: number): void {
+  const notes = FLOOR_NOTES[floor] ?? FLOOR_NOTES[1] ?? [220];
+  const note = notes[Math.floor(Math.random() * notes.length)] ?? 220;
+  bell(note, BED_NOTE_GAIN, 0, BED_NOTE_DECAY, ambienceOut());
+  const nextIn = BED_NOTE_MIN_MS + Math.random() * BED_NOTE_SPAN_MS;
+  bedNoteTimer = setTimeout(() => scheduleBedNote(floor), nextIn);
+}
+
+function stopBedNotes(): void {
+  if (bedNoteTimer === null) return;
+  clearTimeout(bedNoteTimer);
+  bedNoteTimer = null;
+}
+
 /** Starts, or crossfades to, the ambience for a floor. Safe to call every floor change. */
 export function startAmbience(floor: number): void {
   bed?.stop();
   bed = makeBed(floor);
+  stopBedNotes();
+  bedNoteTimer = setTimeout(() => scheduleBedNote(floor), BED_NOTE_MIN_MS);
 }
 
 export function stopAmbience(): void {
   bed?.stop();
   bed = null;
+  stopBedNotes();
 }
 
 // ---- ceremony and feedback sounds ----
@@ -339,16 +462,18 @@ export function sfxHeartbeat(): void {
   thump({ from: 62, to: 38, duration: 0.16, gain: 0.16, delay: 0.19 });
 }
 
-/** The wax seal pressed onto a verified run. */
+/** The wax seal pressed onto a verified run. A ceremony: the bed ducks for it. */
 export function sfxSeal(): void {
+  duckAmbience(500);
   thump({ from: 150, to: 50, duration: 0.22, gain: 0.3, type: 'triangle' });
   burst({ duration: 0.12, type: 'lowpass', from: 2400, to: 400, gain: 0.1 });
   bell(659.3, 0.06, 0.05, 1.4);
   bell(988, 0.05, 0.14, 1.6);
 }
 
-/** A delver becomes the player's own. Warmer and longer than any other cue. */
+/** A delver becomes the player's own. Warmer and longer than any other cue, and a ceremony. */
 export function sfxHeroEarned(): void {
+  duckAmbience(1200);
   bell(392, 0.1, 0, 2.6);
   bell(523.3, 0.09, 0.18, 2.6);
   bell(659.3, 0.09, 0.36, 2.8);
@@ -357,8 +482,9 @@ export function sfxHeroEarned(): void {
   burst({ duration: 1.2, type: 'highpass', from: 3000, to: 8000, gain: 0.03, delay: 0.6 });
 }
 
-/** A low sweep as a floor title appears. */
+/** A low sweep as a floor title appears. A ceremony: the bed ducks for it. */
 export function sfxBanner(): void {
+  duckAmbience(600);
   burst({ duration: 0.9, type: 'bandpass', from: 220, to: 1100, q: 0.6, gain: 0.07 });
   thump({ from: 80, to: 55, duration: 0.5, gain: 0.1, type: 'triangle' });
 }
