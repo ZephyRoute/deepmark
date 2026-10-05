@@ -855,34 +855,26 @@ body:has(#overlay:not([hidden])) .touch {
 @keyframes banner-title { 0% { letter-spacing: 0.5em; opacity: 0; } 30% { letter-spacing: 0.22em; opacity: 1; } 100% { letter-spacing: 0.26em; opacity: 1; } }
 
 /* The result ceremony. */
-/* The win/loss backdrop drifts via `transform`, not `background-position`, so the
-   14 second settle is a compositor-only animation instead of a repaint on every frame. */
-.overlay:has(.result-win),
-.overlay:has(.result-loss) {
+/* The win backdrop drifts via `transform`, not `background-position`, so the
+   14 second settle is a compositor-only animation instead of a repaint on every frame.
+   The loss screen has no image backdrop here: it sinks the last drawn board frame
+   instead (see `canvas.board-sunk` and `.overlay:has(.result-loss)` further down). */
+.overlay:has(.result-win) {
   overflow: hidden;
 }
-.overlay:has(.result-win)::before,
-.overlay:has(.result-loss)::before {
+.overlay:has(.result-win)::before {
   content: "";
   position: absolute;
   inset: -6% 0;
   z-index: -1;
   background-size: cover;
   background-repeat: no-repeat;
-}
-.overlay:has(.result-win)::before {
   background-image:
     linear-gradient(180deg, rgba(7, 8, 14, 0.55) 0%, rgba(7, 8, 14, 0.88) 100%),
     url("/art/victory-bg.webp");
   background-position: center 100%, center;
   animation: result-drift-up 14s ease-out both;
   will-change: transform;
-}
-.overlay:has(.result-loss)::before {
-  background-image:
-    linear-gradient(180deg, rgba(7, 8, 14, 0.75) 0%, rgba(7, 8, 14, 0.94) 100%),
-    url("/art/vault-bg.webp");
-  background-position: center;
 }
 @keyframes result-drift-up {
   from { transform: translateY(3%); }
