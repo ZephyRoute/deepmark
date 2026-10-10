@@ -36,9 +36,9 @@ function stepToward(state: RunState, goal: Point, avoid: boolean): ActionCode | 
   return null;
 }
 
-/** Plays a run to its end with the balanced policy and returns the state. */
-export function playBalanced(state: RunState): RunState {
-  for (let step = 0; step < 800 && state.mode !== 'result'; step++) {
+/** Plays a run with the balanced policy until it ends, or until it holds `maxActions` actions, and returns the state. */
+export function playBalanced(state: RunState, maxActions: number = Infinity): RunState {
+  for (let step = 0; step < 800 && state.mode !== 'result' && state.actions.length < maxActions; step++) {
     if (state.mode === 'combat') applyAction(state, ActionCode.Attack);
     else if (state.mode === 'choice') applyAction(state, ActionCode.Descend);
     else {

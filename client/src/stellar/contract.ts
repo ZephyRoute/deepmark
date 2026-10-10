@@ -194,6 +194,13 @@ export async function fetchRecord(address: string): Promise<PlayerRecord | null>
   return assembled.result ?? null;
 }
 
+/** The run the contract still holds open for a player, if any. */
+export async function fetchOpenRun(address: string): Promise<RunTicket | null> {
+  const client = await readClient();
+  const assembled = await client.get_open_run({ player: address });
+  return assembled.result ?? null;
+}
+
 export async function fetchTopFresh(): Promise<TopEntry[]> {
   const client = await readClient();
   const assembled = await client.top_fresh();
