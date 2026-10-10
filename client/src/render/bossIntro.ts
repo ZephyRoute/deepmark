@@ -6,15 +6,13 @@
  * reload mid fight, since the caller only invokes it from the `descended`
  * event for the boss floor.
  */
+import { prefersReducedMotion } from './preferences';
+
 const BOSS_ART = 'boss-intro.webp';
 const DURATION_MS = 2400;
 const SKIP_AFTER_MS = 800;
 const EXIT_MS = 400;
 const REDUCED_HOLD_MS = 1200;
-
-function reduced(): boolean {
-  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
 
 /** Warms the image cache so the cinematic never waits on the network. Call when floor 2 clears. */
 export function preloadBossArt(): void {
@@ -82,7 +80,7 @@ export function playBossIntro(host: HTMLElement, name: string, onSting: () => vo
     schedule(finish, EXIT_MS);
   }
 
-  if (reduced()) {
+  if (prefersReducedMotion()) {
     scene.classList.add('is-reduced');
     onSting();
     scene.classList.add('is-revealed');

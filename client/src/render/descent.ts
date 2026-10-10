@@ -6,6 +6,7 @@
  * dark. Restraint is the point: nothing here tries to look like a loading bar.
  */
 import { emblemIcon } from './emblems';
+import { prefersReducedMotion } from './preferences';
 
 export interface DescentOptions {
   /** Portrait file under /art, for the medallion. */
@@ -48,10 +49,6 @@ export function setDescentStage(stage: DescentStage): void {
   setStageRef?.(stage);
 }
 
-function reducedMotion(): boolean {
-  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   node.className = className;
@@ -91,7 +88,7 @@ interface Ember {
 
 export function mountDescent(host: HTMLElement, options: DescentOptions): void {
   host.replaceChildren();
-  const calm = reducedMotion();
+  const calm = prefersReducedMotion();
 
   const root = el('div', 'descent');
   const art = el('div', 'descent-art');

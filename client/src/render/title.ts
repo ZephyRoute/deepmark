@@ -6,6 +6,7 @@
  * Stellar updates text in place and never replays the entrance.
  */
 import { startEmbers } from './embers';
+import { prefersReducedMotion } from './preferences';
 
 export interface TitleInfo {
   local: string;
@@ -43,7 +44,7 @@ export function updateTitle(info: TitleInfo): void {
 
 export function mountTitle(host: HTMLElement, info: TitleInfo): void {
   host.replaceChildren();
-  const calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const calm = prefersReducedMotion();
   const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
   const root = el('div', 'title-screen title-v2');
@@ -61,7 +62,6 @@ export function mountTitle(host: HTMLElement, info: TitleInfo): void {
   stage.append(art, light, fog, embers, shade);
 
   const content = el('div', 'title-content');
-  const heading = el('h1', 'sr-only', 'Deepmark');
   const logo = el('img', 'title-logo');
   logo.src = '/art/logo-lockup.webp';
   logo.alt = '';
@@ -82,7 +82,7 @@ export function mountTitle(host: HTMLElement, info: TitleInfo): void {
   const hint = el('p', 'title-hint', 'Enter forges a delver. V the vault. L the leaderboard. M your record. N sound.');
   const players = el('a', 'quiet-link', 'All players');
   players.href = '/stats';
-  content.append(heading, logo, tagline, menu, infoLocal, infoChain, infoVault, hint, players);
+  content.append(logo, tagline, menu, infoLocal, infoChain, infoVault, hint, players);
 
   root.append(stage, content);
   host.append(root);

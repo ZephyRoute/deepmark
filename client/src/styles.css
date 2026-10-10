@@ -3,6 +3,7 @@
   --bg: #07080e;
   --bg-raise: rgba(12, 16, 26, 0.82);
   --line: rgba(232, 224, 208, 0.16);
+  --line-control: rgba(232, 224, 208, 0.55);
   --text: #f4efe6;
   --muted: #a3988c;
   --cyan: #7ef0e0;
@@ -50,6 +51,7 @@ button, input { font: inherit; }
 
 .brand {
   margin: 0;
+  font-weight: 400;
   font-family: Palatino, "Iowan Old Style", Georgia, serif;
   font-size: 1.05rem;
   letter-spacing: 0.14em;
@@ -397,7 +399,6 @@ body:has(#overlay:not([hidden])) .touch {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 4px 0;
 }
 
 .volume-label {
@@ -409,8 +410,11 @@ body:has(#overlay:not([hidden])) .touch {
 
 .volume-input {
   flex: 1;
+  min-height: 44px;
   accent-color: var(--cyan);
 }
+
+.volume-input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 .board-head, .board-row {
   display: grid;
@@ -578,7 +582,7 @@ body:has(#overlay:not([hidden])) .touch {
   min-height: 44px;
   padding: 0 14px;
   border-radius: 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-control);
   background: rgba(8, 10, 16, 0.7);
   color: var(--text);
 }
@@ -600,7 +604,7 @@ body:has(#overlay:not([hidden])) .touch {
   display: grid;
   place-items: center;
   border-radius: 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-control);
   background: rgba(8, 10, 16, 0.55);
   color: var(--text);
   cursor: pointer;
@@ -733,7 +737,7 @@ body:has(#overlay:not([hidden])) .touch {
   * { scroll-behavior: auto !important; }
 }
 
-.btn-mini { min-height: 32px; padding: 0 12px; font-size: 0.78rem; }
+.btn-mini { min-height: 44px; padding: 0 12px; font-size: 0.78rem; }
 .topbar { align-items: center; }
 
 /* The preview stays in view while choosing, and the action row stays reachable. */
@@ -889,7 +893,7 @@ body:has(#overlay:not([hidden])) .touch {
   list-style: none;
 }
 
-.descent-step { display: flex; align-items: center; gap: 7px; color: rgba(163, 152, 140, 0.55); font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase; }
+.descent-step { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase; }
 .descent-step-dot { width: 7px; height: 7px; border-radius: 50%; border: 1px solid currentColor; }
 .descent-step.is-active { color: var(--cyan); }
 .descent-step.is-active .descent-step-dot { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); animation: descent-pulse 1.4s ease-in-out infinite; }
@@ -931,6 +935,7 @@ body:has(#overlay:not([hidden])) .touch {
 @media (prefers-reduced-motion: reduce) {
   .descent, .descent-art, .descent-light { animation: none; }
   .descent-tip { transition: none; }
+  .descent-step.is-active .descent-step-dot { animation: none; }
   .descent.is-diving .descent-art { animation: none; }
 }
 
@@ -1179,6 +1184,8 @@ body:has(#overlay:not([hidden])) .touch {
 }
 
 .result [hidden] { display: none !important; }
+
+.panel-title:focus, .result-title:focus { outline: none; }
 
 .sr-only {
   position: absolute;

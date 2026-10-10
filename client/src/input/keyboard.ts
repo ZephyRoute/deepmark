@@ -75,11 +75,24 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('form') !== null;
 }
 
+/**
+ * A control the player reached with Tab keeps Enter and Space for itself, so
+ * activating it does what its label says instead of the game's own Enter. A
+ * control that was only clicked is not focus-visible, so a player who clicked
+ * Mute and went on playing still gets Enter as confirm.
+ */
+function isKeyboardFocusedControl(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('button, a[href], summary') !== null && target.matches(':focus-visible');
+}
+
+const ACTIVATION_CODES: readonly string[] = ['Enter', 'Space'];
+
 export function onAction(handler: (action: Action) => void): void {
   emit = handler;
   window.addEventListener('keydown', (event) => {
     // Typing in a field (the delver's name) must never be read as a game key.
     if (isTypingTarget(event.target)) return;
+    if (ACTIVATION_CODES.includes(event.code) && isKeyboardFocusedControl(event.target)) return;
     const action = KEY_MAP[event.code];
     if (!action) return;
     event.preventDefault();

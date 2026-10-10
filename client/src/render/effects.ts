@@ -1,5 +1,6 @@
 import { now as clockNow } from './clock';
 import type { RelicKind } from '../game/floor';
+import { prefersReducedMotion } from './preferences';
 
 interface DamagePopup {
   x: number;
@@ -24,7 +25,9 @@ export function spawnPopup(x: number, y: number, text: string, color: string): v
   popups.push({ x, y, text, color, start: clockNow() });
 }
 
+/** Screen shake is skipped when the player asks for reduced motion. */
 export function triggerShake(duration = 150, magnitude = 6): void {
+  if (prefersReducedMotion()) return;
   shake = { start: clockNow(), duration, magnitude };
 }
 
@@ -152,7 +155,8 @@ export function drawLowHealth(ctx: CanvasRenderingContext2D, ratio: number): voi
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
   const urgency = 1 - ratio / 0.34;
-  const beat = Math.pow(Math.max(0, Math.sin(clockNow() / 1000 * (3.2 + urgency * 2))), 6);
+  // A steady tint instead of a heartbeat when the player asks for reduced motion.
+  const beat = prefersReducedMotion() ? 1 : Math.pow(Math.max(0, Math.sin(clockNow() / 1000 * (3.2 + urgency * 2))), 6);
   const alpha = (0.1 + urgency * 0.28) * (0.45 + 0.55 * beat);
   const g = ctx.createRadialGradient(w / 2, h / 2, h * 0.32, w / 2, h / 2, h * 0.8);
   g.addColorStop(0, 'rgba(255, 60, 50, 0)');
