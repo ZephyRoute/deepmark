@@ -22,7 +22,7 @@ export interface Item extends Modifier {
 
 export const WEAPONS: readonly Item[] = [
   { id: 0, name: 'Plumb Blade', icon: 'plumb-blade.webp', blurb: 'A sharper floor on every strike, at the cost of a thinner coat.', hp: -2, dmgMin: 1, dmgMax: 0 },
-  { id: 1, name: 'Reaver Hook', icon: 'reaver-hook.webp', blurb: 'Wild swings that can end a fight early.', hp: -2, dmgMin: 0, dmgMax: 2 },
+  { id: 1, name: 'Reaver Hook', icon: 'reaver-hook.webp', blurb: 'Wild swings that can end a fight early.', hp: -2, dmgMin: 0, dmgMax: 1 },
   { id: 2, name: 'Bulwark Pike', icon: 'bulwark-pike.webp', blurb: 'A reach that keeps you standing, with softer blows.', hp: 1, dmgMin: 0, dmgMax: -1 },
 ];
 
