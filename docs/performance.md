@@ -8,8 +8,11 @@ Measured on the production build, in a real headless Chrome driven over CDP, so 
 cd client
 bun run build
 bun run preview --port 4173 &
-bun run perf            # optionally: bun run perf http://127.0.0.1:4173/
+bun run perf            # optionally: bun run perf http://localhost:4173/
+bun run perf --json > perf.json
 ```
+
+The harness exits with code 1 when a budget below is exceeded. With `--json` the report goes to stdout and the readable log to stderr, so the file stays parseable. Set `CHROME_PATH` to use a Chrome other than the default macOS install.
 
 - **Cold load:** cache disabled, one navigation. Reports bytes by type, first contentful paint, largest contentful paint, cumulative layout shift, long tasks, and the time until the title is usable.
 - **Frames:** a practice run with the Stellar hosts blocked, so it is independent of the network. The script walks into the guard, fights and wanders for 12 seconds while sampling every frame, once at normal CPU and once with the CPU throttled 4 times.
@@ -40,14 +43,20 @@ bun run perf            # optionally: bun run perf http://127.0.0.1:4173/
 
 ## Budgets to keep
 
-| Item | Budget |
-|---|---|
-| Cold load transfer | under 1.2 MB |
-| JavaScript before the title | under 60 KB gzip |
-| Largest contentful paint (local) | under 200 ms |
-| Cumulative layout shift | 0.05 or less |
-| Frame time, 99th percentile, 4x CPU throttle | under 20 ms |
-| Long tasks during load | none over 50 ms |
+The numbers live in `client/scripts/budgets.ts`, which the harness imports, so the code and this table cannot disagree.
+
+| Item | Budget | Enforced in CI |
+|---|---|---|
+| Cold load transfer | under 1.2 MB | yes |
+| Cumulative layout shift | 0.05 or less | yes |
+| Long tasks during load | none over 50 ms | yes |
+| Frame time, 99th percentile, 4x CPU throttle | under 20 ms | yes |
+| JavaScript before the title | under 60 KB gzip | no, read from the build output |
+| Largest contentful paint (local) | under 200 ms | no, too noisy on shared runners |
+
+## Continuous integration
+
+`.github/workflows/perf.yml` builds the client, serves the production preview, runs the harness in a pinned Chrome and fails the check when a budget is exceeded. The failure names the metric, the measured value and the limit. The full report is uploaded as the `perf-report` artifact and summarised on the run page, so two runs can be compared. A pull request that adds a 2 MB image fails with `Cold load transfer is 3091 KB, budget is 1200 KB`.
 
 ## Known limits
 

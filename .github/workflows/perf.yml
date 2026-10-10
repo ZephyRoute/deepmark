@@ -1,0 +1,76 @@
+name: perf
+
+on:
+  pull_request:
+    paths:
+      - client/**
+      - docs/performance.md
+      - .github/workflows/perf.yml
+  push:
+    branches: [main]
+    paths:
+      - client/**
+      - docs/performance.md
+      - .github/workflows/perf.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  budget:
+    name: performance budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.14
+      - name: Install
+        working-directory: client
+        run: bun install --frozen-lockfile
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@54e7c7bf1c147ffca98dc47b796907454c8c1787 # setup-chrome-v2.2.0
+        with:
+          chrome-version: 154.0.8037.92
+          install-dependencies: true
+      - name: Build
+        working-directory: client
+        run: bun run build
+      - name: Serve the production build
+        working-directory: client
+        run: |
+          bun run preview --host 127.0.0.1 --port 4173 --strictPort > "$RUNNER_TEMP/preview.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            curl --silent --fail --output /dev/null http://127.0.0.1:4173/ && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/preview.log"
+          echo "Preview server did not start" >&2
+          exit 1
+      - name: Check the budgets
+        working-directory: client
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: bun run perf http://127.0.0.1:4173/ --json > "$RUNNER_TEMP/perf.json"
+      - name: Summarize
+        if: always()
+        run: |
+          test -s "$RUNNER_TEMP/perf.json" || exit 0
+          {
+            echo "### Performance budget"
+            jq -r '"- Cold load: \(.load.bytesKB) KB of \(.budgets.transferKB) KB\n- Layout shift: \(.load.clsScore) of \(.budgets.layoutShift)\n- Longest task: \(.load.longTasks.maxMs) ms of \(.budgets.longTaskMs) ms\n- Frame p99 at 4x throttle: \(([.frames[] | select(.throttle == 4)][0].p99)) ms of \(.budgets.frameP99Ms) ms"' "$RUNNER_TEMP/perf.json"
+            jq -r '.violations[] | "- **Over budget:** \(.message)"' "$RUNNER_TEMP/perf.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: perf-report
+          path: ${{ runner.temp }}/perf.json
+          if-no-files-found: ignore
