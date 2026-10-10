@@ -4,7 +4,7 @@
  * the background.
  *
  *   bun run build && bun run preview --port 4173 &
- *   bun run perf [url] [--json]
+ *   bun run perf [url] [--json] [--profile=laptop|ci]
  *
  * With --json the report goes to stdout as JSON and the human readable log to
  * stderr. The exit code is 1 when a budget in scripts/budgets.ts is exceeded,
@@ -16,11 +16,17 @@
  */
 import type { Page } from 'puppeteer-core';
 import { blockStellar, launchBrowser } from './browser';
-import { BUDGETS, BUDGET_THROTTLE, checkBudgets, type Violation } from './budgets';
+import { BUDGETS, PROFILES, checkBudgets, isProfileName, type ProfileName, type Violation } from './budgets';
 
 const ARGS = process.argv.slice(2);
 const JSON_OUTPUT = ARGS.includes('--json');
 const URL_UNDER_TEST = ARGS.find((a) => !a.startsWith('--')) ?? 'http://127.0.0.1:4173/';
+const PROFILE_ARG = ARGS.find((a) => a.startsWith('--profile='))?.slice('--profile='.length) ?? 'laptop';
+if (!isProfileName(PROFILE_ARG)) {
+  console.error(`Unknown profile "${PROFILE_ARG}". Use one of: ${Object.keys(PROFILES).join(', ')}.`);
+  process.exit(2);
+}
+const PROFILE: ProfileName = PROFILE_ARG;
 const SAMPLE_MS = 12_000;
 
 interface LoadReport {
@@ -207,7 +213,7 @@ try {
   log(JSON.stringify(load, null, 2));
 
   const frames: FrameReport[] = [];
-  for (const throttle of [1, BUDGET_THROTTLE]) {
+  for (const throttle of new Set([1, PROFILES[PROFILE].throttle])) {
     const fresh = await browser.newPage();
     frames.push(await sampleFrames(fresh, throttle));
     await fresh.close();
@@ -215,9 +221,9 @@ try {
   log('FRAMES (practice run, Stellar blocked, 12 s of play)');
   log(JSON.stringify(frames, null, 2));
 
-  violations = checkBudgets({ load, frames });
+  violations = checkBudgets({ load, frames }, PROFILE);
   if (JSON_OUTPUT) {
-    console.log(JSON.stringify({ url: URL_UNDER_TEST, budgets: BUDGETS, load, frames, violations }, null, 2));
+    console.log(JSON.stringify({ url: URL_UNDER_TEST, profile: PROFILE, budgets: { ...BUDGETS, ...PROFILES[PROFILE] }, load, frames, violations }, null, 2));
   }
   if (violations.length === 0) log('PERF BUDGETS: all within budget');
   else for (const v of violations) console.error(`PERF BUDGET EXCEEDED: ${v.message}`);

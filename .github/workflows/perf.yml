@@ -57,14 +57,14 @@ jobs:
         working-directory: client
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
-        run: bun run perf http://127.0.0.1:4173/ --json > "$RUNNER_TEMP/perf.json"
+        run: bun run perf http://127.0.0.1:4173/ --json --profile=ci > "$RUNNER_TEMP/perf.json"
       - name: Summarize
         if: always()
         run: |
           test -s "$RUNNER_TEMP/perf.json" || exit 0
           {
             echo "### Performance budget"
-            jq -r '"- Cold load: \(.load.bytesKB) KB of \(.budgets.transferKB) KB\n- Layout shift: \(.load.clsScore) of \(.budgets.layoutShift)\n- Longest task: \(.load.longTasks.maxMs) ms of \(.budgets.longTaskMs) ms\n- Frame p99 at 4x throttle: \(([.frames[] | select(.throttle == 4)][0].p99)) ms of \(.budgets.frameP99Ms) ms"' "$RUNNER_TEMP/perf.json"
+            jq -r '.budgets.throttle as $t | "- Cold load: \(.load.bytesKB) KB of \(.budgets.transferKB) KB\n- Layout shift: \(.load.clsScore) of \(.budgets.layoutShift)\n- Longest task: \(.load.longTasks.maxMs) ms of \(.budgets.longTaskMs) ms\n- Frame p99 at \(.budgets.throttle)x throttle: \(([.frames[] | select(.throttle == $t)][0].p99)) ms of \(.budgets.frameP99Ms) ms"' "$RUNNER_TEMP/perf.json"
             jq -r '.violations[] | "- **Over budget:** \(.message)"' "$RUNNER_TEMP/perf.json"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload report

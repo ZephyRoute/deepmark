@@ -49,12 +49,14 @@ The numbers live in `client/scripts/budgets.ts`, which the harness imports, so t
 |---|---|---|
 | Cold load transfer | under 1.2 MB | yes |
 | Cumulative layout shift | 0.05 or less | yes |
-| Long tasks during load | none over 50 ms | yes |
-| Frame time, 99th percentile, 4x CPU throttle | under 20 ms | yes |
+| Long tasks during load | none over 50 ms (200 ms in the CI profile) | yes |
+| Frame time, 99th percentile, 4x CPU throttle | under 20 ms (measured at 1x in the CI profile) | yes |
 | JavaScript before the title | under 60 KB gzip | no, read from the build output |
 | Largest contentful paint (local) | under 200 ms | no, too noisy on shared runners |
 
 ## Continuous integration
+
+The harness has two profiles, chosen with `--profile=laptop` (the default) or `--profile=ci`. Bytes and layout shift are the same in both. Timing is not: the first run on a GitHub runner measured a 49.9 ms frame at 4x throttle and a 126 ms task during load, for a build that holds 16.8 ms and no long task on the laptop, because the runner has no GPU and a CPU several times slower than the reference machine. The `ci` profile therefore samples frames at 1x, which is already a slow machine, and allows a 200 ms task during load. Both sets of numbers are in `client/scripts/budgets.ts`.
 
 `.github/workflows/perf.yml` builds the client, serves the production preview, runs the harness in a pinned Chrome and fails the check when a budget is exceeded. The failure names the metric, the measured value and the limit. The full report is uploaded as the `perf-report` artifact and summarised on the run page, so two runs can be compared. A pull request that adds a 2 MB image fails with `Cold load transfer is 3091 KB, budget is 1200 KB`.
 
