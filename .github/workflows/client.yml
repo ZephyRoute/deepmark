@@ -35,6 +35,9 @@ jobs:
       - name: Typecheck
         working-directory: client
         run: bun run typecheck
+      - name: Test
+        working-directory: client
+        run: bun test
       - name: Build
         working-directory: client
         run: bun run build
@@ -43,3 +46,8 @@ jobs:
         run: |
           bun run golden 2>/dev/null > /tmp/golden.txt
           diff /tmp/golden.txt ../contracts/deepmark-contract/tests/golden.txt
+      - name: Kit difficulty table is current
+        working-directory: client
+        run: |
+          bun run kits 2>/dev/null > /tmp/kits.ts
+          diff /tmp/kits.ts src/game/kitDifficulty.generated.ts
