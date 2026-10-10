@@ -34,6 +34,19 @@ A delver is a base (Lantern or Cinder), one weapon, one charm, and a look (name,
 
 A delver becomes the player's own only when a fresh delver extracts from floor 3 in a verified replay. The Hero record keeps the verified score, HP and move count of that clear. A veteran earns one point of rank (one extra hit point, up to three) per clear and competes on its own leaderboard. Transferring a delver is allowed; a run started with a veteran cannot be finished by anyone but the current owner.
 
+## Delvers and the NFT standard
+
+Delvers are not standard tokens. The shape follows the `NonFungibleToken` interface of SEP-0050 (draft 0.1.0) and the OpenZeppelin `stellar-contracts` module (release `v0.7.2`) for `balance`, `owner_of` and `transfer`, checked on 2026-10-10. The deviations:
+
+- `owner_of` returns an `Option` and does not fail on an unknown id. The standard returns an `Address` and fails with `NonExistentToken`.
+- Errors use this contract's codes (`HeroNotFound` 10, `NotHeroOwner` 11), not the standard's 200 and above.
+- No `transfer_from`, `approve`, `approve_for_all`, `get_approved`, `is_approved_for_all`, `name`, `symbol` or `token_uri`.
+- Events are `hero_transfer` and `hero_earned`, not the standard `transfer` and `mint`.
+- An owner can hold at most 64 delvers, and `transfer` refuses a recipient at the cap.
+- Wallet and explorer visibility has not been tested, and no support is claimed.
+
+The comparison, the two ways to comply and the recommendation are in `docs/architecture/nft-standard.md`.
+
 ## Action encoding
 
 One byte per action: `0` up, `1` down, `2` left, `3` right, `4` attack, `5` retreat, `6` descend, `7` extract. At most 2048 per run. The log must end exactly on the action that finishes the run.
@@ -47,7 +60,7 @@ lib.rs          entrypoints: require_auth, replay, persist, mint, emit events
   world.rs        delvers, enemies and the three floors
   sim.rs          deterministic replay of a run, pure Rust, no Env
   systems.rs      ranking key and profile update, pure Rust, no Env
-tests/golden.rs   replays 400 runs played by the real TypeScript game
+tests/golden.rs   replays 600 runs played by the real TypeScript game
 ```
 
 ## Trust model
@@ -56,7 +69,7 @@ tests/golden.rs   replays 400 runs played by the real TypeScript game
 - **Seed.** Issued on chain from ledger data, the player's run counter and address.
 - **Replay protection.** Finishing consumes the open run.
 - **Authorization.** Both writing entrypoints require the player's own signature.
-- **Relics.** Minted through Stellar Asset Contracts whose admin is this contract. The issuer account is locked after deployment, so nothing else can mint. A mint uses `try_mint`, so a player without a trustline never loses a verified result.
+- **Relics.** Minted through Stellar Asset Contracts whose admin is this contract. A release deployment locks the issuer account (`--lock` in the deploy script), so nothing else can mint. The current testnet issuer is not locked yet: on 2026-10-10 Horizon shows a single signer with weight 1 on `GAH27KP7NDO7HSYGIUFT7O5ONGW7M6RKCXRXIHCTLWKBM2PNU6336YMP`, so the supply claim holds only after the release deployment. A mint uses `try_mint`, so a player without a trustline never loses a verified result.
 - **No admin and no upgrade path.** There is nothing valuable to protect and a key would only add attack surface.
 
 Not covered: seed rerolling is limited by a cooldown and a visible abandoned run counter, not eliminated, and a solver can still play a legal perfect run. There is no third party audit. Review that did happen: 63 unit and entrypoint tests, 600 cross-language vectors with random kits, a mutation check that the vectors catch RNG drift, and live testnet attempts to replay a log, forge a floor 3 run and restart too soon, all rejected.
