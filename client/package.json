@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "golden": "bun run scripts/golden-vectors.ts",
+    "kits": "bun run scripts/kit-difficulty.ts",
     "test": "bun test",
     "perf": "bun run scripts/perf.ts"
   },
