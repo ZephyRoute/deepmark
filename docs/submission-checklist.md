@@ -36,7 +36,7 @@ Status as of 2026-10-10. "Engineering" items are done in the repository and can 
 |---|---|---|
 | `cargo test` | Engineering | Done 2026-10-11: 71 tests and 600 golden vectors pass |
 | Golden vectors current against the client | Engineering | Checked by the client workflow on every change |
-| Testnet deployment, ids published | Engineering | Done, in the README |
+| Testnet deployment, ids and transactions published | Engineering | Done, in the README and `docs/deployments.md` |
 | Issuer account locked | Engineering | Done on the 2026-10-11 testnet deployment: one signer with weight 0, and a transaction signed with its key is rejected |
 | Admin renounced or moved to a multisig | Owner | Open. The testnet admin is a single key and can upgrade the contract. Decide before mainnet and before the final submission |
 | Mainnet or an explicit statement that there is none | Owner | Open. Needs a funded deployer and presence for the transactions |

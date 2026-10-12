@@ -49,7 +49,7 @@ The game is built so it is fun with the chain switched off in your head. Renderi
 | Relic issuer (locked) | `GAD752QFRTNEMQW2SELGHQ5VAMIV3O7H4XRLJN2K2TQFGGXKNFG7CQUK` |
 | Contract admin | `GCZCKB4FUIS5BGEMJOC3EQWKLGH662BOY3HFLH3WWPCGQJXOILDXP7GZ` |
 
-Look any of them up on [stellar.expert](https://stellar.expert/explorer/testnet). The same ids are in `client/src/stellar/config.ts`. `/stats` in the running client is a public page that lists every address with a finished run, read from the contract.
+The setup and verification transactions are listed in `docs/deployments.md`. Look any of them up on [stellar.expert](https://stellar.expert/explorer/testnet). The same ids are in `client/src/stellar/config.ts`. `/stats` in the running client is a public page that lists every address with a finished run, read from the contract.
 
 ## Limitations
 
@@ -87,6 +87,7 @@ GitHub Actions runs the client checks when `client/` changes, the contract check
 | `contracts/deepmark-contract/` | The Soroban contract. `src/{rng,world,sim}.rs` is a bit exact port of `client/src/game/` |
 | `docs/architecture/onchain-boundary.md` | What is on chain, what is not, and why |
 | `docs/architecture/nft-standard.md` | Delvers compared with the Stellar NFT standard |
+| `docs/deployments.md` | Testnet ids and the transaction of every deployment step |
 | `docs/threat-model.md` | The attacks considered, what stops each, what remains |
 | `docs/performance.md`, `docs/accessibility.md` | Budgets and accessibility, with how they are measured |
 | `docs/submission-checklist.md` | What is done and what is still open |
