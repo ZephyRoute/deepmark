@@ -98,10 +98,7 @@ function playOne(g: Rng): { line: string } | null {
     } else {
       const relic = state.relics.find((r) => !r.collected);
       const goal: Point = habits.wantsRelic && relic ? relic : state.layout.stairsPos;
-      const code =
-        stepToward(state, goal, habits.avoidsFights) ??
-        stepToward(state, goal, false) ??
-        (randInt(g, 0, 3) as ActionCode);
+      const code = stepToward(state, goal, habits.avoidsFights) ?? stepToward(state, goal, false) ?? (randInt(g, 0, 3) as ActionCode);
       applyAction(state, code);
     }
     kinds.push(...relicKinds(state));

@@ -1,4 +1,6 @@
+import { loadingBlock } from '../render/loader';
 import { STELLAR_CONFIG } from '../stellar/config';
+import { el } from './dom';
 import { MAX_TRACKED_FLOOR, PLAYER_CAP, type DayCount, type PlayerMark, type RecordedRun, type TractionSummary } from './summary';
 
 const WHEN = new Intl.DateTimeFormat('en-GB', {
@@ -16,17 +18,7 @@ const DAY = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
 });
 
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  text?: string
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
+const LOADING_ROWS = 4;
 const STELLAR_VIEW = 'https://stellarview.acachete.xyz/en/testnet';
 
 function viewAccount(address: string): string {
@@ -138,17 +130,28 @@ function runCard(run: RecordedRun): HTMLElement {
 }
 
 export function renderLoading(root: HTMLElement): void {
-  root.replaceChildren(shell(el('p', 'lede', 'Reading recorded runs from Stellar testnet...')));
+  root.replaceChildren(shell(loadingBlock('Reading recorded runs from Stellar testnet', LOADING_ROWS)));
 }
 
 export function renderError(root: HTMLElement, onRetry: () => void): void {
-  const body = el('div', 'stack');
-  body.append(el('p', 'lede', 'Stellar testnet could not be read from this browser.'));
+  const body = el('div', 'notice');
+  body.setAttribute('role', 'alert');
+  body.append(el('h2', 'section-title', 'Could not read the record'));
+  body.append(
+    el(
+      'p',
+      'lede',
+      'Stellar testnet could not be read from this browser. Your connection or the network may be having a moment. Nothing was lost.'
+    )
+  );
+  const actions = el('div', 'player-actions');
   const retry = el('button', 'btn btn-primary', 'Try again');
   retry.type = 'button';
   retry.addEventListener('click', onRetry);
-  body.append(retry);
+  actions.append(retry);
+  body.append(actions);
   root.replaceChildren(shell(body));
+  retry.focus();
 }
 
 export function renderSummary(root: HTMLElement, summary: TractionSummary): void {
@@ -214,7 +217,9 @@ export function renderSummary(root: HTMLElement, summary: TractionSummary): void
     const recent = el('section', 'block');
     recent.append(el('h2', 'section-title', 'Latest recorded runs'));
     if (summary.recentRunCount > summary.recentRuns.length) {
-      recent.append(el('p', 'note', `Showing the latest ${summary.recentRuns.length} of ${summary.recentRunCount} still in Stellar's public history.`));
+      recent.append(
+        el('p', 'note', `Showing the latest ${summary.recentRuns.length} of ${summary.recentRunCount} still in Stellar's public history.`)
+      );
     }
     const list = el('div', 'player-list');
     for (const run of summary.recentRuns) list.append(runCard(run));
@@ -229,8 +234,24 @@ export function renderSummary(root: HTMLElement, summary: TractionSummary): void
     '. The contract replays each run from its action log and derives the floor, score and relics itself, so a result cannot be claimed without playing it. A death banks no relics.'
   );
   body.append(fine);
+  const leave = el('div', 'player-actions');
+  leave.append(backLink(), docsLink());
+  body.append(leave);
 
   root.replaceChildren(shell(body));
+}
+
+/** The way home, always visible: a real button-sized link, not just the small wordmark. */
+function backLink(): HTMLAnchorElement {
+  const link = el('a', 'btn btn-back', 'Back to the game');
+  link.href = '/';
+  return link;
+}
+
+function docsLink(): HTMLAnchorElement {
+  const link = el('a', 'btn', 'Docs');
+  link.href = '/docs/';
+  return link;
 }
 
 function shell(content: HTMLElement): HTMLElement {
@@ -241,7 +262,12 @@ function shell(content: HTMLElement): HTMLElement {
   header.append(brand);
   header.append(el('p', 'eyebrow', 'Stellar testnet'));
   page.append(header);
+  const nav = el('nav', 'page-nav');
+  nav.setAttribute('aria-label', 'Deepmark');
+  nav.append(backLink(), docsLink());
+  page.append(nav);
   const main = el('main');
+  main.setAttribute('aria-busy', content.getAttribute('role') === 'status' ? 'true' : 'false');
   main.append(el('h1', 'page-title', 'Recorded play'));
   main.append(content);
   page.append(main);

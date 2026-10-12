@@ -1,6 +1,6 @@
 # Delvers and the Stellar NFT standard
 
-Research note, written on 2026-10-10. It compares the delver entry points of the game contract with the current Stellar standard for non-fungible tokens and says what would be needed to comply. It does not claim explorer support, and the last section says what was and was not checked.
+Research note, written on 2026-10-10. It compares the delver entry points of the game contract with the current Stellar standard for non-fungible tokens and says what would be needed to comply. It does not claim explorer support, and the last section says what was and was not checked. Relics are a different thing: they are classic Stellar assets wrapped by Stellar Asset Contracts, so they are standard tokens and are not covered here (see [`onchain-boundary.md`](onchain-boundary.md) and [`../deployments.md`](../deployments.md)). Only delvers are compared below.
 
 ## What was consulted
 
@@ -8,7 +8,7 @@ Research note, written on 2026-10-10. It compares the delver entry points of the
 |---|---|
 | SEP-0050, Non-Fungible Tokens | Status Draft, version 0.1.0, created and updated 2025-03-10. The file was last changed in `stellar/stellar-protocol` on 2025-06-17 (commit `d4d17e6`) |
 | OpenZeppelin `stellar-contracts`, `non_fungible` module, `NonFungibleToken` trait | Release `v0.7.2`, 2026-06-09 (commit `a9c4216`). The newest release, `v0.8.0-rc.3` of 2026-06-16, has a byte for byte identical `non_fungible/mod.rs` |
-| Deployed game contract interface | Read from testnet with `stellar contract info interface` for the contract that was live when this note was written (`CDL7OO7MGCNMHZBF5QPJCMBLLY3ORR44TJ54ON44M25YUX6UZ7L46UZW`, since replaced, see the README for the current id) |
+| Deployed game contract interface | Read from testnet with `stellar contract info interface` for the contract that was live when this note was written (`CDL7OO7MGCNMHZBF5QPJCMBLLY3ORR44TJ54ON44M25YUX6UZ7L46UZW`, since replaced, see [`../deployments.md`](../deployments.md) for the current id) |
 
 SEP-0050 is a draft authored by OpenZeppelin, and the OpenZeppelin module is its reference implementation, so the two are compared together. The standard also notes a classic alternative, SEP-0039 plus a Stellar Asset Contract, and the reasons it is a poor fit (one asset per token, or fungible tokens inside one asset). Delvers carry a look, a kit and an on-chain proof, which that route cannot hold.
 

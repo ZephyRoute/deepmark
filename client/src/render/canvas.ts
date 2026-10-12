@@ -74,7 +74,15 @@ function biome(floor: number): { floor: HTMLImageElement; wall: HTMLImageElement
   return { floor: art.floor, wall: art.wall, stairs: art.stairs };
 }
 
-function pickFrame(idle: HTMLImageElement, walkA: HTMLImageElement, walkB: HTMLImageElement, attack: HTMLImageElement, clip: Clip, phase: number, shift: boolean): HTMLImageElement {
+function pickFrame(
+  idle: HTMLImageElement,
+  walkA: HTMLImageElement,
+  walkB: HTMLImageElement,
+  attack: HTMLImageElement,
+  clip: Clip,
+  phase: number,
+  shift: boolean
+): HTMLImageElement {
   if (clip === 'attack') {
     if (ready(attack)) return attack;
     if (ready(walkA)) return walkA;
@@ -125,14 +133,7 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-function drawBar(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  topY: number,
-  width: number,
-  ratio: number,
-  lowThreshold: number
-): void {
+function drawBar(ctx: CanvasRenderingContext2D, cx: number, topY: number, width: number, ratio: number, lowThreshold: number): void {
   const height = 5;
   roundRect(ctx, cx - width / 2, topY, width, height, 2);
   ctx.fillStyle = COLOR_HPBACK;
@@ -144,30 +145,16 @@ function drawBar(
   ctx.fill();
 }
 
-function blitCell(
-  ctx: CanvasRenderingContext2D,
-  image: HTMLImageElement,
-  x: number,
-  y: number,
-  dx: number,
-  dy: number
-): void {
+function blitCell(ctx: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, dx: number, dy: number): void {
   const sx = (x / GRID_WIDTH) * image.width;
   const sy = (y / GRID_HEIGHT) * image.height;
-  ctx.drawImage(
-    image,
-    sx,
-    sy,
-    image.width / GRID_WIDTH,
-    image.height / GRID_HEIGHT,
-    dx,
-    dy,
-    TILE_SIZE,
-    TILE_SIZE
-  );
+  ctx.drawImage(image, sx, sy, image.width / GRID_WIDTH, image.height / GRID_HEIGHT, dx, dy, TILE_SIZE, TILE_SIZE);
 }
 
-function playerFrames(heroId: HeroId, veteran: boolean): {
+function playerFrames(
+  heroId: HeroId,
+  veteran: boolean
+): {
   idle: HTMLImageElement;
   walkA: HTMLImageElement;
   walkB: HTMLImageElement;
@@ -209,13 +196,7 @@ function drawFooted(
   ctx.restore();
 }
 
-function drawCentered(
-  ctx: CanvasRenderingContext2D,
-  image: HTMLImageElement,
-  cx: number,
-  cy: number,
-  size: number
-): void {
+function drawCentered(ctx: CanvasRenderingContext2D, image: HTMLImageElement, cx: number, cy: number, size: number): void {
   ctx.drawImage(image, cx - size / 2, cy - size / 2, size, size);
 }
 
@@ -276,13 +257,7 @@ function paintBoard(ctx: CanvasRenderingContext2D, run: RunState, offsetX: numbe
   }
 }
 
-function shadeOpenEdge(
-  ctx: CanvasRenderingContext2D,
-  dx: number,
-  dy: number,
-  side: 'n' | 's' | 'e' | 'w',
-  blocked: boolean
-): void {
+function shadeOpenEdge(ctx: CanvasRenderingContext2D, dx: number, dy: number, side: 'n' | 's' | 'e' | 'w', blocked: boolean): void {
   if (!blocked) return;
   const depth = 16;
   let gradient: CanvasGradient;
@@ -451,19 +426,9 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
   const playerPose = sampleActor('player', run.player.x, run.player.y);
   const player = cell(playerPose.x, playerPose.y);
   const sheet = playerFrames(run.heroId, run.loadout.rank > 0);
-  const playerImage = pickFrame(
-    sheet.idle,
-    sheet.walkA,
-    sheet.walkB,
-    sheet.attack,
-    playerPose.clip,
-    playerPose.phase,
-    false
-  );
+  const playerImage = pickFrame(sheet.idle, sheet.walkA, sheet.walkB, sheet.attack, playerPose.clip, playerPose.phase, false);
   const playerLunge = playerPose.clip === 'attack' ? Math.sin(playerPose.phase * Math.PI) * 12 * facing : 0;
-  const squat = run.heroId === 'cinder' && playerPose.clip === 'walk'
-    ? 1 - Math.sin(playerPose.phase * Math.PI) * 0.08
-    : 1;
+  const squat = run.heroId === 'cinder' && playerPose.clip === 'walk' ? 1 - Math.sin(playerPose.phase * Math.PI) * 0.08 : 1;
   if (ready(playerImage)) {
     // The cloak colour recolours the delver. Browsers without canvas filters just draw the base art.
     const cloak = cloakFilter(run.look.cloak, run.loadout.base);
@@ -471,8 +436,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, run: RunState): void {
     ctx.filter = cloak === 'none' ? flash.trim() || 'none' : `${cloak}${flash}`;
     drawFooted(ctx, playerImage, player.cx + playerLunge, player.cy, ACTOR_SIZE.player, facing < 0, squat);
     ctx.filter = 'none';
-  }
-  else {
+  } else {
     ctx.fillStyle = '#4fc3f7';
     ctx.beginPath();
     ctx.arc(player.cx, player.cy, 16, 0, Math.PI * 2);

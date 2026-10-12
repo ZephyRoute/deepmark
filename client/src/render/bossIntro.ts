@@ -69,7 +69,7 @@ export function playBossIntro(host: HTMLElement, name: string, onSting: () => vo
   function finish(): void {
     if (done) return;
     done = true;
-    timers.forEach((timer) => window.clearTimeout(timer));
+    for (const timer of timers) window.clearTimeout(timer);
     scene.remove();
     onDone();
   }

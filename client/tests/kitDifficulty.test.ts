@@ -18,7 +18,9 @@ const MAX_CLEAR_PERCENT = 60;
 
 function allKits(): { base: number; weapon: number; charm: number; percent: number }[] {
   return HERO_ORDER.flatMap((_, base) =>
-    WEAPONS.flatMap((_, weapon) => CHARMS.map((_, charm) => ({ base, weapon, charm, percent: clearPercent({ base, weapon, charm }) ?? NaN })))
+    WEAPONS.flatMap((_, weapon) =>
+      CHARMS.map((_, charm) => ({ base, weapon, charm, percent: clearPercent({ base, weapon, charm }) ?? NaN }))
+    )
   );
 }
 

@@ -81,12 +81,15 @@ async function coldLoad(page: Page): Promise<LoadReport> {
     new PerformanceObserver((l) => {
       for (const e of l.getEntries()) if (e.name === 'first-contentful-paint') perf.fcp = e.startTime;
     }).observe({ type: 'paint', buffered: true });
-    (w.__shifts as string[] | undefined) ?? (w.__shifts = []);
+    if (!w.__shifts) w.__shifts = [];
     new PerformanceObserver((l) => {
       for (const e of l.getEntries() as unknown as { value: number; hadRecentInput: boolean; sources?: { node?: Element }[] }[]) {
         if (e.hadRecentInput) continue;
         perf.cls += e.value;
-        const names = (e.sources ?? []).map((src) => `${src.node?.nodeName ?? '?'}.${(src.node as HTMLElement | undefined)?.className ?? ''}#${(src.node as HTMLElement | undefined)?.id ?? ''}`);
+        const names = (e.sources ?? []).map(
+          (src) =>
+            `${src.node?.nodeName ?? '?'}.${(src.node as HTMLElement | undefined)?.className ?? ''}#${(src.node as HTMLElement | undefined)?.id ?? ''}`
+        );
         (w.__shifts as string[]).push(`${e.value.toFixed(3)} ${names.join(' | ')}`);
       }
     }).observe({ type: 'layout-shift', buffered: true });
@@ -223,7 +226,13 @@ try {
 
   violations = checkBudgets({ load, frames }, PROFILE);
   if (JSON_OUTPUT) {
-    console.log(JSON.stringify({ url: URL_UNDER_TEST, profile: PROFILE, budgets: { ...BUDGETS, ...PROFILES[PROFILE] }, load, frames, violations }, null, 2));
+    console.log(
+      JSON.stringify(
+        { url: URL_UNDER_TEST, profile: PROFILE, budgets: { ...BUDGETS, ...PROFILES[PROFILE] }, load, frames, violations },
+        null,
+        2
+      )
+    );
   }
   if (violations.length === 0) log('PERF BUDGETS: all within budget');
   else for (const v of violations) console.error(`PERF BUDGET EXCEEDED: ${v.message}`);

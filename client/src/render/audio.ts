@@ -3,12 +3,14 @@
  * download, nothing to license. A quiet ambience per floor, soft footsteps,
  * hits with a little variation each time, and bell tones for relics.
  */
+import { readItem, writeItem } from '../storage';
+
 const MUTE_KEY = 'deepmark:muted:v1';
 const FX_VOLUME_KEY = 'deepmark:vol:fx:v1';
 const AMBIENCE_VOLUME_KEY = 'deepmark:vol:ambience:v1';
 const MASTER_LEVEL = 0.9;
 /** A ceremony sound ducks the ambience by about 6 dB for its length. */
-const DUCK_FACTOR = Math.pow(10, -6 / 20);
+const DUCK_FACTOR = 10 ** (-6 / 20);
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -22,22 +24,14 @@ let fxVolume = readVolume(FX_VOLUME_KEY);
 let ambienceVolume = readVolume(AMBIENCE_VOLUME_KEY);
 
 function readMuted(): boolean {
-  try {
-    return localStorage.getItem(MUTE_KEY) === '1';
-  } catch {
-    return false;
-  }
+  return readItem(MUTE_KEY) === '1';
 }
 
 function readVolume(key: string): number {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return 1;
-    const value = Number(raw);
-    return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
-  } catch {
-    return 1;
-  }
+  const raw = readItem(key);
+  if (raw === null) return 1;
+  const value = Number(raw);
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 }
 
 /**
@@ -107,11 +101,7 @@ export function isMuted(): boolean {
 
 export function toggleMuted(): boolean {
   muted = !muted;
-  try {
-    localStorage.setItem(MUTE_KEY, muted ? '1' : '0');
-  } catch {
-    // The choice still holds for this tab.
-  }
+  writeItem(MUTE_KEY, muted ? '1' : '0');
   const audio = getContext();
   if (audio && master) master.gain.setTargetAtTime(muted ? 0 : MASTER_LEVEL, audio.currentTime, 0.05);
   return muted;
@@ -127,22 +117,14 @@ export function getAmbienceVolume(): number {
 
 export function setFxVolume(value: number): void {
   fxVolume = Math.min(1, Math.max(0, value));
-  try {
-    localStorage.setItem(FX_VOLUME_KEY, String(fxVolume));
-  } catch {
-    // The choice still holds for this tab.
-  }
+  writeItem(FX_VOLUME_KEY, String(fxVolume));
   const audio = getContext();
   if (audio && fxGain) fxGain.gain.setTargetAtTime(fxVolume, audio.currentTime, 0.05);
 }
 
 export function setAmbienceVolume(value: number): void {
   ambienceVolume = Math.min(1, Math.max(0, value));
-  try {
-    localStorage.setItem(AMBIENCE_VOLUME_KEY, String(ambienceVolume));
-  } catch {
-    // The choice still holds for this tab.
-  }
+  writeItem(AMBIENCE_VOLUME_KEY, String(ambienceVolume));
   const audio = getContext();
   if (audio && ambienceGain) ambienceGain.gain.setTargetAtTime(ambienceVolume, audio.currentTime, 0.05);
 }
@@ -227,7 +209,11 @@ function bell(freq: number, gainLevel: number, delay = 0, decay = 1.1, destinati
   const dest = destination ?? out();
   if (!audio || !dest) return;
   const t = audio.currentTime + delay;
-  for (const [ratio, level] of [[1, 1], [2.76, 0.45], [5.4, 0.2]] as const) {
+  for (const [ratio, level] of [
+    [1, 1],
+    [2.76, 0.45],
+    [5.4, 0.2],
+  ] as const) {
     const osc = audio.createOscillator();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq * ratio, t);
@@ -357,7 +343,11 @@ function makeBed(floor: number): Bed | null {
 
   const stoppers: (() => void)[] = [];
 
-  for (const [freq, gainValue] of [[spec.root, 0.07], [spec.root * 1.003, 0.05], [spec.tension, 0.025]] as const) {
+  for (const [freq, gainValue] of [
+    [spec.root, 0.07],
+    [spec.root * 1.003, 0.05],
+    [spec.tension, 0.025],
+  ] as const) {
     const osc = audio.createOscillator();
     osc.type = 'sine';
     osc.frequency.value = freq;
@@ -373,7 +363,10 @@ function makeBed(floor: number): Bed | null {
     gain.connect(level);
     osc.start();
     lfo.start();
-    stoppers.push(() => osc.stop(), () => lfo.stop());
+    stoppers.push(
+      () => osc.stop(),
+      () => lfo.stop()
+    );
   }
 
   const wind = audio.createBufferSource();
@@ -396,7 +389,10 @@ function makeBed(floor: number): Bed | null {
   windGain.connect(level);
   wind.start();
   sweep.start();
-  stoppers.push(() => wind.stop(), () => sweep.stop());
+  stoppers.push(
+    () => wind.stop(),
+    () => sweep.stop()
+  );
 
   return {
     stop: () => {

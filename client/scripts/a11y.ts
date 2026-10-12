@@ -173,14 +173,24 @@ async function targetFindings(page: Page): Promise<Finding[]> {
       if (hidden || node.classList.contains('sr-only')) continue;
       if (Math.round(rect.width) < min || Math.round(rect.height) < min) {
         const label = node.getAttribute('aria-label') ?? node.textContent?.trim().slice(0, 30) ?? '';
-        out.push(`${node.tagName.toLowerCase()}.${node.className.toString().split(' ')[0]} "${label}" ${Math.round(rect.width)}x${Math.round(rect.height)}`);
+        out.push(
+          `${node.tagName.toLowerCase()}.${node.className.toString().split(' ')[0]} "${label}" ${Math.round(rect.width)}x${Math.round(rect.height)}`
+        );
       }
     }
     return out;
   }, MIN_TARGET_PX);
   return small.length === 0
     ? []
-    : [{ kind: 'target', rule: 'target-size-44', impact: 'serious', detail: `Controls under ${MIN_TARGET_PX} by ${MIN_TARGET_PX} px`, nodes: small }];
+    : [
+        {
+          kind: 'target',
+          rule: 'target-size-44',
+          impact: 'serious',
+          detail: `Controls under ${MIN_TARGET_PX} by ${MIN_TARGET_PX} px`,
+          nodes: small,
+        },
+      ];
 }
 
 /** Animations still looping once the screen has settled. */
@@ -193,7 +203,15 @@ async function motionFindings(page: Page): Promise<Finding[]> {
   );
   return looping.length === 0
     ? []
-    : [{ kind: 'motion', rule: 'reduced-motion-loop', impact: 'serious', detail: 'Animation still looping with reduced motion on', nodes: looping }];
+    : [
+        {
+          kind: 'motion',
+          rule: 'reduced-motion-loop',
+          impact: 'serious',
+          detail: 'Animation still looping with reduced motion on',
+          nodes: looping,
+        },
+      ];
 }
 
 async function auditScreen(pass: Pass, scenario: Scenario, browser: Awaited<ReturnType<typeof launchBrowser>>): Promise<ScreenReport> {
@@ -202,7 +220,11 @@ async function auditScreen(pass: Pass, scenario: Scenario, browser: Awaited<Retu
   await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: pass.reducedMotion ? 'reduce' : 'no-preference' }]);
   await blockStellar(page);
   await scenario.open(page);
-  const findings = [...(await axeFindings(page)), ...(await targetFindings(page)), ...(pass.reducedMotion ? await motionFindings(page) : [])];
+  const findings = [
+    ...(await axeFindings(page)),
+    ...(await targetFindings(page)),
+    ...(pass.reducedMotion ? await motionFindings(page) : []),
+  ];
   await page.close();
   return { pass: pass.name, screen: scenario.name, findings, blocking: findings.filter((f) => BLOCKING_IMPACTS.includes(f.impact)).length };
 }
@@ -215,7 +237,9 @@ const KEY_SETTLE_MS = 250;
 const describeFocus = (page: Page): Promise<string> =>
   page.evaluate(() => {
     const a = document.activeElement;
-    return a ? `${a.tagName.toLowerCase()}.${a.className.toString().split(' ')[0]} "${(a.textContent ?? '').trim().slice(0, 24)}"` : 'nothing';
+    return a
+      ? `${a.tagName.toLowerCase()}.${a.className.toString().split(' ')[0]} "${(a.textContent ?? '').trim().slice(0, 24)}"`
+      : 'nothing';
   });
 
 /** Tabs until a control matching the selector has focus. Returns false when it never does. */
@@ -244,10 +268,16 @@ async function keyboardFindings(browser: Awaited<ReturnType<typeof launchBrowser
     await page.waitForSelector('.panel-title', { timeout: SETTLE_MS }).catch(() => undefined);
     const opened = await page.evaluate(() => document.querySelector('.panel-title')?.textContent ?? '');
     check(opened === 'Your vault', `Enter on the focused Vault item opened "${opened || 'nothing'}" instead of the vault`);
-    check(await page.evaluate(() => document.activeElement?.classList.contains('panel-title') ?? false), `Focus did not move into the vault screen (on ${await describeFocus(page)})`);
+    check(
+      await page.evaluate(() => document.activeElement?.classList.contains('panel-title') ?? false),
+      `Focus did not move into the vault screen (on ${await describeFocus(page)})`
+    );
     await page.keyboard.press('Escape');
     await settle(SHORT_SETTLE_MS);
-    check(await page.evaluate(() => document.activeElement?.matches('.menu-item.is-primary') ?? false), `Focus did not return to the menu after Escape (on ${await describeFocus(page)})`);
+    check(
+      await page.evaluate(() => document.activeElement?.matches('.menu-item.is-primary') ?? false),
+      `Focus did not return to the menu after Escape (on ${await describeFocus(page)})`
+    );
   }
 
   // Forge and descend without touching the pointer: Enter on the menu, Enter inside the name field.
@@ -274,7 +304,9 @@ async function keyboardFindings(browser: Awaited<ReturnType<typeof launchBrowser
   await page.close();
 
   const findings: Finding[] =
-    problems.length === 0 ? [] : [{ kind: 'keyboard', rule: 'keyboard-flow', impact: 'serious', detail: 'Keyboard only flow', nodes: problems }];
+    problems.length === 0
+      ? []
+      : [{ kind: 'keyboard', rule: 'keyboard-flow', impact: 'serious', detail: 'Keyboard only flow', nodes: problems }];
   return { pass: 'keyboard', screen: 'title to first move', findings, blocking: findings.length };
 }
 

@@ -29,9 +29,11 @@ export const CONTRACT_ERROR = {
   InvalidName: 9,
   HeroNotFound: 10,
   NotHeroOwner: 11,
+  Frozen: 12,
+  NotInitialized: 13,
+  MintFailed: 14,
 } as const;
 
 export function isContractError(err: unknown, code: number): boolean {
   return err instanceof Error && err.message.includes(`Error(Contract, #${code})`);
 }
-

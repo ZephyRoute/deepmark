@@ -5,7 +5,9 @@
  *   ?preview=vault        a vault with two earned delvers
  *   ?preview=leaderboard  a leaderboard with the player in second place
  */
-import { leaderboardCard, vaultCard, type LeaderboardRow } from '../render/chrome';
+import type { LeaderboardRow } from '../render/chromeTypes';
+import { leaderboardCard } from '../render/leaderboardCard';
+import { vaultCard } from '../render/vaultCard';
 import type { Hero } from '../stellar/contract';
 
 const SAMPLE_PLAYER = 'GCDEEPMARKSAMPLEPLAYERADDRESSAAAAAAAAAAAAAAAAAAAAAAAAAAB';
@@ -40,9 +42,25 @@ const SAMPLE_HEROES: Hero[] = [
 ];
 
 const SAMPLE_ROWS: LeaderboardRow[] = [
-  { address: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', name: 'Corvin', emblem: 0, score: 7, floor: 3, hpLeft: 4, actions: 98 },
+  {
+    address: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    name: 'Corvin',
+    emblem: 0,
+    score: 7,
+    floor: 3,
+    hpLeft: 4,
+    actions: 98,
+  },
   { address: SAMPLE_PLAYER, name: 'Brannoch', emblem: 1, score: 6, floor: 3, hpLeft: 3, actions: 112 },
-  { address: 'GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB', name: 'Isolde', emblem: 3, score: 4, floor: 2, hpLeft: 0, actions: 131 },
+  {
+    address: 'GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+    name: 'Isolde',
+    emblem: 3,
+    score: 4,
+    floor: 2,
+    hpLeft: 0,
+    actions: 131,
+  },
 ];
 
 export type ScreenPreview = 'vault' | 'leaderboard';
@@ -62,6 +80,7 @@ export function mountScreenPreview(kind: ScreenPreview): void {
       : leaderboardCard({
           boardTab: 'fresh',
           leaderboardLoading: false,
+          leaderboardFailed: false,
           leaderboardRows: SAMPLE_ROWS,
           playerAddress: SAMPLE_PLAYER,
           justVerified: false,

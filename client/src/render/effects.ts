@@ -44,10 +44,7 @@ export function getShakeOffset(): [number, number] {
   return [Math.sin(elapsed * 0.9 + 1.3) * mag, Math.cos(elapsed * 1.1) * mag];
 }
 
-export function drawPopups(
-  ctx: CanvasRenderingContext2D,
-  toScreen: (x: number, y: number) => { cx: number; cy: number }
-): void {
+export function drawPopups(ctx: CanvasRenderingContext2D, toScreen: (x: number, y: number) => { cx: number; cy: number }): void {
   const now = clockNow();
   popups = popups.filter((p) => now - p.start < POPUP_LIFETIME_MS);
   for (const popup of popups) {
@@ -125,10 +122,7 @@ export function spawnBurst(x: number, y: number, kind: BurstKind): void {
   }
 }
 
-export function drawParticles(
-  ctx: CanvasRenderingContext2D,
-  toScreen: (x: number, y: number) => { cx: number; cy: number }
-): void {
+export function drawParticles(ctx: CanvasRenderingContext2D, toScreen: (x: number, y: number) => { cx: number; cy: number }): void {
   const now = clockNow();
   particles = particles.filter((p) => now - p.start < p.ttl);
   for (const p of particles) {
@@ -156,7 +150,7 @@ export function drawLowHealth(ctx: CanvasRenderingContext2D, ratio: number): voi
   const h = ctx.canvas.height;
   const urgency = 1 - ratio / 0.34;
   // A steady tint instead of a heartbeat when the player asks for reduced motion.
-  const beat = prefersReducedMotion() ? 1 : Math.pow(Math.max(0, Math.sin(clockNow() / 1000 * (3.2 + urgency * 2))), 6);
+  const beat = prefersReducedMotion() ? 1 : Math.max(0, Math.sin((clockNow() / 1000) * (3.2 + urgency * 2))) ** 6;
   const alpha = (0.1 + urgency * 0.28) * (0.45 + 0.55 * beat);
   const g = ctx.createRadialGradient(w / 2, h / 2, h * 0.32, w / 2, h / 2, h * 0.8);
   g.addColorStop(0, 'rgba(255, 60, 50, 0)');
@@ -196,7 +190,7 @@ export function drawRelicTravel(ctx: CanvasRenderingContext2D): void {
       arrived.push(t.kind);
       return false;
     }
-    const eased = 1 - Math.pow(1 - p, 3);
+    const eased = 1 - (1 - p) ** 3;
     const x = t.x0 + (t.x1 - t.x0) * eased;
     const lift = Math.sin(p * Math.PI) * -26;
     const y = t.y0 + (t.y1 - t.y0) * eased + lift;

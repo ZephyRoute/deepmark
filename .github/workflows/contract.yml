@@ -27,6 +27,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: wasm32v1-none
+          components: rustfmt, clippy
       - uses: actions/cache@v4
         with:
           path: |
@@ -34,6 +35,12 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
           key: cargo-${{ runner.os }}-1.97.1-${{ hashFiles('contracts/deepmark-contract/Cargo.lock') }}
+      - name: Format
+        working-directory: contracts/deepmark-contract
+        run: cargo fmt --check
+      - name: Clippy
+        working-directory: contracts/deepmark-contract
+        run: cargo clippy --all-targets -- -D warnings
       - name: Test
         working-directory: contracts/deepmark-contract
         run: cargo test

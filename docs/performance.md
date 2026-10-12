@@ -24,7 +24,7 @@ The harness exits with code 1 when a budget below is exceeded. With `--json` the
 |---|---|---|
 | Transferred on a cold load | 3,954 KB | 937 KB |
 | Of which images | 3,787 KB | 760 KB |
-| Of which JavaScript | 160 KB | 169 KB, with the Stellar SDK (135 KB gzip) loaded when idle |
+| Of which JavaScript | 160 KB | 169 KB, with the Stellar SDK (135 KB gzip) loaded when idle (chunk `stellar-sdk`, 137 KB gzip as of 2026-10-12) |
 | Title usable | 385 ms | 73 ms |
 | First contentful paint | not captured | 44 ms |
 | Largest contentful paint | not captured | 96 ms |
@@ -38,7 +38,7 @@ The harness exits with code 1 when a budget below is exceeded. With `--json` the
 ## What changed
 
 1. **Art converted to WebP** with sizes matched to how each file is drawn (`client/scripts/optimize-art.sh`). The art folder went from 6.6 MB to 1.2 MB.
-2. **The Stellar SDK loads when the browser is idle**, not before the title. The title no longer waits for 135 KB of cryptography it does not use yet. `client/src/stellar/lazy.ts` warms the chunk after first paint, so it is normally ready by the time a player presses Forge.
+2. **The Stellar SDK loads when the browser is idle**, not before the title. The title no longer waits for 137 KB of cryptography it does not use yet. `client/src/stellar/lazy.ts` warms the chunk after first paint, so it is normally ready by the time a player presses Forge. The chunk is named `stellar-sdk` in `client/vite.config.ts`, and the Vite build warns above 700 KB, which is the size of that chunk by design.
 3. **The main stylesheet is a normal `<link>`**, not imported from a lazily loaded script. Loading it from script made the page paint unstyled and then jump, which measured a layout shift of 0.92 once everything else got fast.
 
 ## Budgets to keep

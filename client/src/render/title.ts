@@ -82,7 +82,11 @@ export function mountTitle(host: HTMLElement, info: TitleInfo): void {
   const hint = el('p', 'title-hint', 'Enter forges a delver. V the vault. L the leaderboard. M your record. N sound.');
   const players = el('a', 'quiet-link', 'All players');
   players.href = '/stats';
-  content.append(logo, tagline, menu, infoLocal, infoChain, infoVault, hint, players);
+  const docs = el('a', 'quiet-link', 'Docs');
+  docs.href = '/docs';
+  const links = el('div', 'quiet-links');
+  links.append(players, docs);
+  content.append(logo, tagline, menu, infoLocal, infoChain, infoVault, hint, links);
 
   root.append(stage, content);
   host.append(root);

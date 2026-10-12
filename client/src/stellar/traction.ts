@@ -26,14 +26,7 @@ function playerMark(address: unknown, raw: PlayerRecord | null | undefined): Pla
   const deaths = count(raw.deaths);
   const forfeits = count(raw.forfeits);
   const relicsBanked = count(raw.relics_banked);
-  if (
-    bestFloor === null ||
-    bestScore === null ||
-    extractions === null ||
-    deaths === null ||
-    forfeits === null ||
-    relicsBanked === null
-  ) {
+  if (bestFloor === null || bestScore === null || extractions === null || deaths === null || forfeits === null || relicsBanked === null) {
     return null;
   }
   const finishedRuns = extractions + deaths;
@@ -60,9 +53,7 @@ function parseRun(event: rpc.Api.EventResponse): RecordedRun | null {
   if (name !== 'run_finished') return null;
   const address = event.topic[1] ? scValToNative(event.topic[1]) : null;
   if (!isAddress(address)) return null;
-  const value = scValToNative(event.value) as
-    | { floor_reached?: unknown; score?: unknown; extracted?: unknown }
-    | null;
+  const value = scValToNative(event.value) as { floor_reached?: unknown; score?: unknown; extracted?: unknown } | null;
   if (!value || typeof value !== 'object') return null;
   const floorReached = count(value.floor_reached, 3);
   const score = count(value.score, 6);

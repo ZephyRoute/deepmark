@@ -1,5 +1,6 @@
 import { MAX_FLOOR } from './floor';
 import type { HeroId } from './heroes';
+import { readJson, writeJson } from '../storage';
 
 export interface Progress {
   bestFloor: number;
@@ -49,22 +50,14 @@ function sanitize(raw: Partial<Progress> | null): Progress {
 }
 
 export function loadProgress(): Progress {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...EMPTY };
-    return sanitize(JSON.parse(raw) as Partial<Progress>);
-  } catch {
-    return { ...EMPTY };
-  }
+  const stored = readJson(STORAGE_KEY);
+  if (!stored || typeof stored !== 'object') return { ...EMPTY };
+  return sanitize(stored as Partial<Progress>);
 }
 
 function saveProgress(progress: Progress): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
-  } catch {
-    // localStorage unavailable (private mode, quota, etc). Progression just
-    // won't persist across reloads this session; the run itself still works.
-  }
+  // When storage is unavailable progression just does not persist; the run itself still works.
+  writeJson(STORAGE_KEY, progress);
 }
 
 export interface FinishedRun {
@@ -73,6 +66,8 @@ export interface FinishedRun {
   score: number;
   extracted: boolean;
   heroId: HeroId;
+  /** A practice run is not recorded anywhere, so it never counts toward this browser's bests. */
+  practice: boolean;
 }
 
 function bump(value: number, amount: number): number {
@@ -81,6 +76,7 @@ function bump(value: number, amount: number): number {
 
 export function recordRun(finished: FinishedRun): { progress: Progress; isNewBest: boolean } {
   const previous = loadProgress();
+  if (finished.practice) return { progress: previous, isNewBest: false };
   const floorReached = count(finished.floorReached, MAX_FLOOR);
   const relicsKept = finished.extracted ? count(finished.relicsKept) : 0;
   const score = finished.extracted ? count(finished.score) : 0;

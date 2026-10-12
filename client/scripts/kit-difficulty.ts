@@ -30,9 +30,7 @@ function clearPercent(base: number, weapon: number, charm: number, seeds: readon
 function main(): void {
   const stream = mulberry32(SEED_STREAM);
   const seeds = Array.from({ length: RUNS_PER_KIT }, () => Math.floor(stream() * 0xffffffff));
-  const table = HERO_ORDER.map((_, base) =>
-    WEAPONS.map((_, weapon) => CHARMS.map((_, charm) => clearPercent(base, weapon, charm, seeds)))
-  );
+  const table = HERO_ORDER.map((_, base) => WEAPONS.map((_, weapon) => CHARMS.map((_, charm) => clearPercent(base, weapon, charm, seeds))));
   const rows = table.map((weapons) => `  [${weapons.map((charms) => `[${charms.join(', ')}]`).join(', ')}],`);
   console.log(
     [

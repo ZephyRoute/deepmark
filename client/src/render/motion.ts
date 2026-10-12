@@ -38,7 +38,11 @@ export function playAttack(id: string, x: number, y: number): void {
   });
 }
 
-export function sampleActor(id: string, x: number, y: number): {
+export function sampleActor(
+  id: string,
+  x: number,
+  y: number
+): {
   x: number;
   y: number;
   clip: Clip;

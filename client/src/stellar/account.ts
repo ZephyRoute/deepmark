@@ -1,5 +1,7 @@
-import { Asset, BASE_FEE, Keypair, Operation, rpc, TransactionBuilder } from '@stellar/stellar-sdk';
+import { Asset, BASE_FEE, Keypair, Operation, rpc, StrKey, TransactionBuilder } from '@stellar/stellar-sdk';
 import { RELIC_ASSETS, RELIC_ISSUER, STELLAR_CONFIG } from './config';
+import { readItem, writeItem } from '../storage';
+import { retryTransient } from './transient';
 
 const STORAGE_KEY = 'deepmark:stellar-secret:v1';
 const TRUSTLINE_FLAG_PREFIX = 'deepmark:relic-trustlines:v1:';
@@ -8,7 +10,8 @@ const ACCOUNT_POLL_ATTEMPTS = 10;
 const TX_POLL_ATTEMPTS = 20;
 const POLL_INTERVAL_MS = 1500;
 
-let cached: Promise<Keypair> | null = null;
+let preparing: Promise<Keypair> | null = null;
+let memoryKeypair: Keypair | null = null;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -28,19 +31,12 @@ function trustlineFlagKey(publicKey: string): string {
 }
 
 function trustlinesAlreadyAdded(publicKey: string): boolean {
-  try {
-    return localStorage.getItem(trustlineFlagKey(publicKey)) === '1';
-  } catch {
-    return false;
-  }
+  return readItem(trustlineFlagKey(publicKey)) === '1';
 }
 
 function rememberTrustlines(publicKey: string): void {
-  try {
-    localStorage.setItem(trustlineFlagKey(publicKey), '1');
-  } catch {
-    // Without storage the step simply repeats next visit. It is idempotent.
-  }
+  // Without storage the step simply repeats next visit. It is idempotent.
+  writeItem(trustlineFlagKey(publicKey), '1');
 }
 
 /**
@@ -49,9 +45,9 @@ function rememberTrustlines(publicKey: string): void {
  * game contract only if the trustline exists, and the contract never loses a
  * verified run if it does not, so a failure here is not fatal.
  */
-async function ensureRelicTrustlines(keypair: Keypair): Promise<void> {
+async function ensureRelicTrustlines(keypair: Keypair, force = false): Promise<void> {
   const publicKey = keypair.publicKey();
-  if (trustlinesAlreadyAdded(publicKey)) return;
+  if (!force && trustlinesAlreadyAdded(publicKey)) return;
 
   const server = new rpc.Server(STELLAR_CONFIG.rpcUrl);
   let account = null;
@@ -107,21 +103,70 @@ async function ensureRelicTrustlines(keypair: Keypair): Promise<void> {
  * client depends on how the keypair was obtained.
  */
 export function getPlayerKeypair(): Promise<Keypair> {
-  if (!cached) {
-    cached = (async () => {
-      const existingSecret = localStorage.getItem(STORAGE_KEY);
-      const keypair = existingSecret ? Keypair.fromSecret(existingSecret) : Keypair.random();
-      if (!existingSecret) localStorage.setItem(STORAGE_KEY, keypair.secret());
+  preparing ??= prepareAccount();
+  return preparing;
+}
 
-      try {
-        await fundOnTestnet(keypair.publicKey());
-        await ensureRelicTrustlines(keypair);
-      } catch (err) {
-        console.warn('Deepmark: account preparation did not finish', err);
-      }
+/**
+ * Redoes the account's relic setup even if it was marked done, for a player
+ * whose relic mint was refused. Adding a trustline that exists is harmless.
+ * Throws if the setup could not finish, so the caller can say so.
+ */
+export async function prepareRelicSetup(): Promise<void> {
+  const keypair = await getPlayerKeypair();
+  await retryTransient(() => fundOnTestnet(keypair.publicKey()));
+  await retryTransient(() => ensureRelicTrustlines(keypair, true));
+}
 
-      return keypair;
-    })();
+async function prepareAccount(): Promise<Keypair> {
+  const keypair = loadOrCreateKeypair();
+  try {
+    await retryTransient(() => fundOnTestnet(keypair.publicKey()));
+    await retryTransient(() => ensureRelicTrustlines(keypair));
+  } catch (err) {
+    console.warn('Deepmark: account preparation did not finish', err);
+    // Forget this attempt so the next caller retries funding in the same session.
+    preparing = null;
   }
-  return cached;
+  return keypair;
+}
+
+function loadOrCreateKeypair(): Keypair {
+  if (memoryKeypair) return memoryKeypair;
+  const existingSecret = localStorage.getItem(STORAGE_KEY);
+  const keypair = existingSecret ? Keypair.fromSecret(existingSecret) : Keypair.random();
+  if (!existingSecret) localStorage.setItem(STORAGE_KEY, keypair.secret());
+  memoryKeypair = keypair;
+  return keypair;
+}
+
+/**
+ * The account's recovery code, for the player to keep somewhere safe. It is
+ * the only way to get this account back after the browser's site data is
+ * cleared. Returns null if this browser holds no account yet. Callers must
+ * hand it straight to the clipboard and never log or render it.
+ */
+export function getRecoveryCode(): string | null {
+  return memoryKeypair?.secret() ?? localStorage.getItem(STORAGE_KEY);
+}
+
+/** True when the text is a well formed recovery code. */
+export function isRecoveryCode(code: string): boolean {
+  return StrKey.isValidEd25519SecretSeed(code);
+}
+
+/** The public address a recovery code belongs to, safe to show. Throws on an invalid code. */
+export function recoveryCodeAddress(code: string): string {
+  const trimmed = code.trim();
+  if (!isRecoveryCode(trimmed)) throw new Error('That recovery code is not valid');
+  return Keypair.fromSecret(trimmed).publicKey();
+}
+
+/** Replaces this browser's account with one restored from a recovery code. The page should reload after. */
+export function restoreRecoveryCode(code: string): void {
+  const trimmed = code.trim();
+  if (!isRecoveryCode(trimmed)) throw new Error('That recovery code is not valid');
+  localStorage.setItem(STORAGE_KEY, trimmed);
+  memoryKeypair = null;
+  preparing = null;
 }

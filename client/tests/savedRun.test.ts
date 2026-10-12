@@ -86,7 +86,11 @@ describe('replaying a saved run', () => {
 
 describe('saved data', () => {
   test('stays far below the size cap even for the longest run the contract accepts', () => {
-    const longest: SavedRun = { seed: 0xffff_ffff, loadout: { base: 1, weapon: 2, charm: 2, rank: 3 }, actions: Array(MAX_ACTIONS).fill(ActionCode.Retreat) };
+    const longest: SavedRun = {
+      seed: 0xffff_ffff,
+      loadout: { base: 1, weapon: 2, charm: 2, rank: 3 },
+      actions: Array(MAX_ACTIONS).fill(ActionCode.Retreat),
+    };
     const run = newRun(longest.loadout, longest.seed, LOOK);
     run.actions = longest.actions;
     expect(serializeSavedRun(run).length).toBeLessThan(MAX_SAVED_BYTES);
