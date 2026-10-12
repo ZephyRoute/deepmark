@@ -1,0 +1,35 @@
+name: diagrams
+
+on:
+  pull_request:
+    paths:
+      - diagrams/**
+      - .github/workflows/diagrams.yml
+  push:
+    branches: [main]
+    paths:
+      - diagrams/**
+      - .github/workflows/diagrams.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagrams-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagrams:
+    name: diagrams
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: diagrams
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run check
