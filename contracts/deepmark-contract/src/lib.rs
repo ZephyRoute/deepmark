@@ -25,13 +25,15 @@ pub mod sim;
 pub mod systems;
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_safety;
+pub mod ttl;
 pub mod world;
 
 use components::{
     DataKey, FreshHero, Hero, HeroChoice, Look, PlayerRecord, PlayerSummary, RelicTokens,
     RunOutcome, RunTicket, TopEntry, ACTIONS_PER_LEDGER, CONTRACT_VERSION, MAX_ACTIONS,
     MAX_HEROES_PER_OWNER, MAX_PAGE, RELIC_UNIT, RUN_TTL, START_COOLDOWN_LEDGERS, TOP_SIZE,
-    TTL_EXTEND_TO, TTL_THRESHOLD,
 };
 use sim::{Ending, Outcome, SimError};
 use soroban_sdk::{
@@ -39,6 +41,7 @@ use soroban_sdk::{
     Address, Bytes, BytesN, Env, String, Vec,
 };
 use systems::{apply_outcome, rank_key};
+use ttl::{extend_instance, keep_hero_alive, keep_shared_alive, save_persistent};
 use world::{Loadout, MAX_FLOOR, MAX_RANK};
 
 #[contracterror]
@@ -58,6 +61,12 @@ pub enum Error {
     NotHeroOwner = 11,
     /// The admin role was renounced, so the contract can no longer change.
     Frozen = 12,
+    /// The relic token addresses are missing from storage.
+    NotInitialized = 13,
+    /// A relic mint failed (for example the player has no trustline for that
+    /// relic). Nothing is recorded and the run stays open, so the player can
+    /// fix the cause and call `finish_run` again.
+    MintFailed = 14,
 }
 
 impl From<SimError> for Error {
@@ -152,6 +161,7 @@ impl DeepmarkContract {
     pub fn start_run(env: Env, player: Address, choice: HeroChoice) -> Result<RunTicket, Error> {
         player.require_auth();
         extend_instance(&env);
+        keep_shared_alive(&env);
 
         let (loadout, look, veteran) = match choice {
             HeroChoice::Fresh(fresh) => {
@@ -163,6 +173,7 @@ impl DeepmarkContract {
                 if hero.owner != player {
                     return Err(Error::NotHeroOwner);
                 }
+                keep_hero_alive(&env, id, &player);
                 let rank = hero.clears.min(MAX_RANK);
                 let loadout = Loadout {
                     base: hero.base,
@@ -295,11 +306,16 @@ impl DeepmarkContract {
             None
         };
 
-        let minted = outcome.ending == Ending::Extracted && mint_relics(&env, &player, &outcome);
+        // A failed mint returns an error, which reverts every write above and
+        // leaves the run open. `minted` is therefore true for every extraction.
+        let extracted = outcome.ending == Ending::Extracted;
+        if extracted {
+            mint_relics(&env, &player, &outcome)?;
+        }
 
         RunFinished {
             player,
-            extracted: outcome.ending == Ending::Extracted,
+            extracted,
             floor_reached: outcome.floor_reached,
             score: outcome.score,
             relics_common: outcome.relics_common,
@@ -308,7 +324,7 @@ impl DeepmarkContract {
             hp_left: outcome.hp_left,
             actions: outcome.actions,
             is_new_best,
-            minted,
+            minted: extracted,
             hero_id,
         }
         .publish(&env);
@@ -428,8 +444,8 @@ impl DeepmarkContract {
     }
 
     /// The Stellar Asset Contracts that hold relics.
-    pub fn relic_tokens(env: Env) -> RelicTokens {
-        env.storage().instance().get(&DataKey::Relics).unwrap()
+    pub fn relic_tokens(env: Env) -> Result<RelicTokens, Error> {
+        load_relics(&env)
     }
 
     /// A delver by id, or `None`.
@@ -476,6 +492,12 @@ impl DeepmarkContract {
         if hero.owner != from {
             return Err(Error::NotHeroOwner);
         }
+        // Giving a delver to its own owner changes nothing: succeed without
+        // touching storage or emitting an event, so the owner's list never
+        // gets a duplicate id.
+        if from == to {
+            return Ok(());
+        }
         let mut theirs: Vec<u32> = env
             .storage()
             .persistent()
@@ -511,14 +533,6 @@ impl DeepmarkContract {
         .publish(&env);
         Ok(())
     }
-}
-
-/// Keep the contract instance (admin, relic tokens, and with it the code) alive
-/// while the game is being played.
-fn extend_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
 }
 
 fn name_is_valid(name: &String) -> bool {
@@ -571,17 +585,6 @@ fn derive_seed(env: &Env, player: &Address, runs: u32) -> u32 {
     material.append(&player.clone().to_xdr(env));
     let hash = env.crypto().sha256(&material).to_array();
     u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]])
-}
-
-fn save_persistent<V: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(
-    env: &Env,
-    key: &DataKey,
-    value: &V,
-) {
-    env.storage().persistent().set(key, value);
-    env.storage()
-        .persistent()
-        .extend_ttl(key, TTL_THRESHOLD, TTL_EXTEND_TO);
 }
 
 fn save_record(env: &Env, key: &DataKey, record: &PlayerRecord) {
@@ -708,12 +711,19 @@ fn earn_or_advance(
     Some(id)
 }
 
-/// Mint the relics a verified extraction banked. Uses `try_mint` so a player
-/// without a trustline never loses their verified result: the run is recorded
-/// either way and `minted` reports whether every mint succeeded.
-fn mint_relics(env: &Env, player: &Address, outcome: &Outcome) -> bool {
-    let tokens: RelicTokens = env.storage().instance().get(&DataKey::Relics).unwrap();
-    let mut all_minted = true;
+fn load_relics(env: &Env) -> Result<RelicTokens, Error> {
+    env.storage()
+        .instance()
+        .get(&DataKey::Relics)
+        .ok_or(Error::NotInitialized)
+}
+
+/// Mint the relics a verified extraction banked. A failed mint (the SAC
+/// rejects it when the player has no trustline for that relic, or the
+/// trustline is full or deauthorized) is a real, fixable condition, so it
+/// fails the whole `finish_run` instead of silently dropping the relics.
+fn mint_relics(env: &Env, player: &Address, outcome: &Outcome) -> Result<(), Error> {
+    let tokens = load_relics(env)?;
     for (token, amount) in [
         (&tokens.common, outcome.relics_common),
         (&tokens.rare, outcome.relics_rare),
@@ -725,10 +735,10 @@ fn mint_relics(env: &Env, player: &Address, outcome: &Outcome) -> bool {
         let result =
             StellarAssetClient::new(env, token).try_mint(player, &(amount as i128 * RELIC_UNIT));
         if !matches!(result, Ok(Ok(()))) {
-            all_minted = false;
+            return Err(Error::MintFailed);
         }
     }
-    all_minted
+    Ok(())
 }
 
 fn to_contract_outcome(outcome: &Outcome, key: u64, hero_id: Option<u32>) -> RunOutcome {

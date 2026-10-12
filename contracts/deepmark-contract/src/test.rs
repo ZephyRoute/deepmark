@@ -18,22 +18,22 @@ use soroban_sdk::{
 };
 use std::{vec, vec::Vec};
 
-struct Fixture<'a> {
-    env: Env,
-    client: DeepmarkContractClient<'a>,
+pub struct Fixture<'a> {
+    pub env: Env,
+    pub client: DeepmarkContractClient<'a>,
     common: Address,
     rare: Address,
     core: Address,
 }
 
-fn set_ledger(env: &Env, sequence: u32) {
+pub fn set_ledger(env: &Env, sequence: u32) {
     env.ledger().with_mut(|l| {
         l.sequence_number = sequence;
         l.timestamp = 1_700_000_000 + sequence as u64 * 5;
     });
 }
 
-fn setup<'a>() -> Fixture<'a> {
+pub fn setup<'a>() -> Fixture<'a> {
     let env = Env::default();
     env.mock_all_auths();
     set_ledger(&env, 100);
@@ -83,11 +83,11 @@ fn fresh(env: &Env, base: u32, weapon: u32, charm: u32, name: &str) -> HeroChoic
 }
 
 /// Bulwark Pike and Stone Heart on Lantern: 12 HP, damage 2 to 4.
-fn plain(env: &Env) -> HeroChoice {
+pub fn plain(env: &Env) -> HeroChoice {
     fresh(env, 0, 2, 2, "Ash")
 }
 
-fn bytes(env: &Env, actions: &[u8]) -> Bytes {
+pub fn bytes(env: &Env, actions: &[u8]) -> Bytes {
     Bytes::from_slice(env, actions)
 }
 
@@ -97,7 +97,7 @@ fn repeat(action: u8, times: usize) -> Vec<u8> {
 
 /// Floor 1 without a fight: over the detour to the stairs, then extract.
 /// It touches no RNG, so it is valid for any issued seed.
-fn free_extraction() -> Vec<u8> {
+pub fn free_extraction() -> Vec<u8> {
     let mut a = Vec::new();
     a.extend(repeat(ACTION_UP, 3));
     a.extend(repeat(ACTION_RIGHT, 7));
@@ -110,7 +110,7 @@ fn free_extraction() -> Vec<u8> {
 /// Beat the floor 1 Warden, take the common relic from the pocket, walk out
 /// over the detour and extract. Extra attacks after the kill are ignored by
 /// the simulation, so this is valid for any seed and either delver.
-fn relic_extraction() -> Vec<u8> {
+pub fn relic_extraction() -> Vec<u8> {
     let mut a = repeat(ACTION_RIGHT, 4);
     a.extend(repeat(ACTION_ATTACK, 3));
     a.extend(repeat(ACTION_RIGHT, 2));
@@ -184,14 +184,14 @@ fn try_clear(loadout: &Loadout, seed: u32) -> Option<Vec<u8>> {
     (outcome.floor_reached == 3 && outcome.ending == crate::sim::Ending::Extracted).then_some(log)
 }
 
-fn finish_ledger(f: &Fixture, actions: usize) {
+pub fn finish_ledger(f: &Fixture, actions: usize) {
     let now = f.env.ledger().sequence();
     set_ledger(&f.env, now + (actions as u32 / 16) + 1);
 }
 
 /// Opens runs, one after another, until the issued seed lets the scripted
 /// player clear all three floors, then finishes that run. Returns the outcome.
-fn clear_all_floors(
+pub fn clear_all_floors(
     f: &Fixture,
     player: &Address,
     choice: &HeroChoice,
@@ -210,7 +210,7 @@ fn clear_all_floors(
 }
 
 /// A strong, sturdy fresh delver the scripted player can clear with often.
-fn strong(env: &Env, name: &str) -> (HeroChoice, Loadout) {
+pub fn strong(env: &Env, name: &str) -> (HeroChoice, Loadout) {
     (
         fresh(env, 1, 1, 0, name),
         Loadout {
@@ -481,41 +481,6 @@ fn a_banked_relic_is_minted_as_a_stellar_asset() {
     assert_eq!(TokenClient::new(&f.env, &f.rare).balance(&player), 0);
     assert_eq!(TokenClient::new(&f.env, &f.core).balance(&player), 0);
     assert_eq!(f.client.get_record(&player).unwrap().relics_banked, 1);
-}
-
-#[test]
-fn a_failed_mint_never_loses_the_verified_run() {
-    // Relic addresses that are not tokens make every mint fail, which is what
-    // a player with no trustline looks like. The run must still be recorded.
-    let env = Env::default();
-    env.mock_all_auths();
-    set_ledger(&env, 100);
-    let bogus = [
-        Address::generate(&env),
-        Address::generate(&env),
-        Address::generate(&env),
-    ];
-    let id = env.register(
-        DeepmarkContract,
-        (
-            Address::generate(&env),
-            bogus[0].clone(),
-            bogus[1].clone(),
-            bogus[2].clone(),
-        ),
-    );
-    let client = DeepmarkContractClient::new(&env, &id);
-    let player = Address::generate(&env);
-
-    client.start_run(&player, &plain(&env));
-    let log = relic_extraction();
-    set_ledger(&env, 100 + log.len() as u32 / 16 + 1);
-    let outcome = client.finish_run(&player, &bytes(&env, &log));
-
-    assert_eq!(outcome.relics_common, 1);
-    let record = client.get_record(&player).unwrap();
-    assert_eq!(record.extractions, 1);
-    assert_eq!(client.top_fresh().len(), 1);
 }
 
 #[test]
