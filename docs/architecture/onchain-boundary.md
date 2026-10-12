@@ -26,7 +26,8 @@ Contract: `contracts/deepmark-contract`.
 - **Leaderboard.** One sorted list of the best 100 verified runs, read in a single call, ranked by extraction, score, floor, HP left, then fewest actions. The number of players is not capped, and players are listed through a paged call.
 - **Audit.** `verify_run(hero, seed, actions)` replays any run without writing anything, so anyone can check a result from the `run_started` event and the log.
 - **Delvers.** The contract is also the registry of earned delvers: `owner_of`, `heroes_of`, `hero`, `balance` and `transfer`. Mint happens only inside `finish_run`, after the replay.
-- **Relic assets.** Three classic assets (`DMCOMMON`, `DMRARE`, `DMCORE`), each wrapped by a Stellar Asset Contract. The game contract is the admin of each, and the issuer account is locked, so nothing can mint except a verified extraction.
+- **Relic assets.** Three classic assets (`DMCOMMON`, `DMRARE`, `DMCORE`), each wrapped by a Stellar Asset Contract. The game contract is the admin of each, and the issuer account is locked (master weight zero, no other signer), so nothing can mint except a verified extraction.
+- **Admin and upgrade.** The game contract has an admin (the deployer) that can replace its code, hand the role to another address or renounce it. While the role exists, players trust that admin not to ship code that skips the replay. Renouncing, or moving the role to a multisig, is the step that removes that trust, and is planned before any mainnet release.
 
 ## Off-chain (client)
 
@@ -42,6 +43,7 @@ Contract: `contracts/deepmark-contract`.
 - Nobody can act for an address that did not sign.
 - The client cannot choose a favourable seed.
 - Relics exist only because a verified run banked them, and anyone can see the supply.
+- Upgrades are visible: every code swap, handover and renounce emits an event, and `admin()` reports `None` once the contract is frozen.
 
 ## What it does not provide
 

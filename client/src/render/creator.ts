@@ -2,6 +2,7 @@ import { HEROES, HERO_ORDER } from '../game/heroes';
 import { CHARMS, WEAPONS, type Item } from '../game/items';
 import { isValidName, NAME_MAX, NAME_MIN, statsFor, EMBLEM_COUNT } from '../game/loadout';
 import { loadoutOf, randomName, saveDraft, type Draft } from '../game/draft';
+import { clearPercent, difficultyOf, DIFFICULTY_LABEL, isRecommended, RECOMMENDED_KIT, type Difficulty } from '../game/kitDifficulty';
 import { cloakCount, cloakFilter, cloakName, cloakSwatch, EMBLEM_NAMES, emblemIcon } from './emblems';
 
 export interface CreatorHooks {
@@ -57,10 +58,23 @@ export function mountCreator(host: HTMLElement, initial: Draft, hooks: CreatorHo
   const previewCopy = el('div', 'creator-preview-copy');
   const previewName = el('p', 'creator-preview-name');
   const previewStats = el('p', 'creator-preview-stats');
-  previewCopy.append(previewName, previewStats);
+  const previewKit = el('p', 'creator-preview-kit');
+  const kitTier = el('span', 'kit-tier');
+  const kitOdds = el('span', 'kit-odds');
+  previewKit.append(kitTier, kitOdds);
+  previewCopy.append(previewName, previewStats, previewKit);
   const previewEmblem = el('span', 'creator-preview-emblem');
   preview.append(previewPortrait, previewCopy, previewEmblem);
   root.append(preview);
+
+  // Starter kit guidance: which kit is the fair first descent, and a way back to it.
+  const kitRow = el('div', 'kit-row');
+  const kitNote = el('span', 'field-hint');
+  kitNote.setAttribute('role', 'status');
+  const useRecommended = el('button', 'btn btn-mini', 'Use the recommended kit');
+  useRecommended.type = 'button';
+  kitRow.append(kitNote, useRecommended);
+  root.append(kitRow);
 
   // Name
   const nameField = el('label', 'field');
@@ -226,6 +240,18 @@ export function mountCreator(host: HTMLElement, initial: Draft, hooks: CreatorHo
     previewName.textContent = valid ? name : 'Unnamed delver';
     previewStats.textContent = `${stats.maxHp} HP  ·  strikes for ${stats.dmgMin} to ${stats.dmgMax}`;
     previewEmblem.replaceChildren(emblemIcon(draft.look.emblem, 'emblem emblem-large'));
+    showKitGuidance();
+  }
+
+  function showKitGuidance(): void {
+    const percent = clearPercent(draft);
+    const tier: Difficulty | null = percent === null ? null : difficultyOf(percent);
+    kitTier.className = `kit-tier${tier ? ` is-${tier}` : ''}`;
+    kitTier.textContent = tier ? DIFFICULTY_LABEL[tier] : '';
+    kitOdds.textContent = percent === null ? '' : `Clears about ${percent} in 100 descents`;
+    const recommended = isRecommended(draft);
+    kitNote.textContent = recommended ? 'The recommended kit for a first descent.' : 'Not sure? One kit clears more often than the rest.';
+    useRecommended.hidden = recommended;
   }
 
   nameInput.addEventListener('input', () => {
@@ -235,6 +261,10 @@ export function mountCreator(host: HTMLElement, initial: Draft, hooks: CreatorHo
   reroll.addEventListener('click', () => {
     draft.look.name = randomName();
     nameInput.value = draft.look.name;
+    refresh();
+  });
+  useRecommended.addEventListener('click', () => {
+    Object.assign(draft, RECOMMENDED_KIT);
     refresh();
   });
   back.addEventListener('click', () => hooks.onBack());

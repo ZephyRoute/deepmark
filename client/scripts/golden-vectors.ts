@@ -137,13 +137,6 @@ function playOne(g: Rng): { line: string } | null {
 }
 
 function main(): void {
-  // The game persists progress through localStorage, which does not exist here.
-  const store = new Map<string, string>();
-  (globalThis as { localStorage?: unknown }).localStorage = {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, v),
-  };
-
   // Touch the floors so a layout change fails loudly instead of silently.
   for (let n = 1; n <= 3; n++) buildFloor(n);
 

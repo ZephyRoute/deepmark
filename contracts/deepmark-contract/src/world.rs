@@ -50,7 +50,7 @@ const WEAPONS: [Modifier; 3] = [
     Modifier {
         hp: -2,
         dmg_min: 0,
-        dmg_max: 2,
+        dmg_max: 1,
     },
     Modifier {
         hp: 1,
@@ -156,7 +156,7 @@ pub fn archetype(kind: EnemyKind) -> Archetype {
         EnemyKind::Warden => Archetype {
             max_hp: 6,
             dmg_min: 1,
-            dmg_max: 3,
+            dmg_max: 2,
         },
         EnemyKind::Skitter => Archetype {
             max_hp: 4,

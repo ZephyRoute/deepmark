@@ -60,7 +60,7 @@ async function clearOnce(choice: HeroChoice): Promise<{ heroId: number | undefin
     lap(`attempt ${attempt} seed ${ticket.seed} rank ${ticket.rank}: ${cleared ? 'cleared' : state.resultKind} (${state.actions.length} actions)`);
     await sleep(Math.ceil(state.actions.length / 16) * 5000 + 6000);
     const { outcome, hash } = await finishRun(keypair, state.actions);
-    lap(`finish_run ${hash.slice(0, 10)} extracted=${outcome.extracted} floor=${outcome.floor_reached} score=${outcome.score} hero=${outcome.hero_id ?? 'none'}`);
+    lap(`finish_run ${hash} extracted=${outcome.extracted} floor=${outcome.floor_reached} score=${outcome.score} hero=${outcome.hero_id ?? 'none'}`);
     if (cleared) return { heroId: outcome.hero_id, score: outcome.score };
   }
   throw new Error('no clear in 12 attempts');
