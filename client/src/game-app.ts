@@ -1,5 +1,6 @@
 import { ActionCode, applyAction, drainEvents, newRun, type GameEvent, type RunState } from './game/state';
-import { loadProgress, type Progress } from './game/progress';
+import { loadProgress, recordRun, type Progress } from './game/progress';
+import { clearSavedRun, loadSavedRun, planResume, saveRun, type ResumePlan } from './game/savedRun';
 import { onAction, type Action } from './input/keyboard';
 import { drawWorld, face } from './render/canvas';
 import { playAttack, resetMotion } from './render/motion';
@@ -48,7 +49,7 @@ import type { DescentOptions, DescentStage } from './render/descent';
 import { rankForClears, type Loadout, type Look } from './game/loadout';
 import { chain, warmChain } from './stellar/lazy';
 import { CONTRACT_ERROR, freshChoice, isContractError, veteranChoice } from './stellar/choice';
-import type { FinishedRun, Hero, HeroChoice, PlayerRecord, TopEntry } from './stellar/contract';
+import type { FinishedRun, Hero, HeroChoice, PlayerRecord, RunTicket, TopEntry } from './stellar/contract';
 import { fetchRelicBalances, type RelicBalances } from './stellar/relics';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -163,7 +164,7 @@ async function refreshOnchain(): Promise<void> {
 }
 
 // Load the Stellar chunk when idle, then read the player's record. The title never waits for either.
-warmChain(() => void refreshOnchain());
+warmChain(() => void refreshOnchain().then(resumeOpenRun));
 
 function onchainSnapshot(): OnchainSnapshot | null {
   if (!onchainRecord) return null;
@@ -309,6 +310,7 @@ async function beginRun(plan: DelverPlan): Promise<void> {
     const loadout: Loadout = { base: ticket.base, weapon: ticket.weapon, charm: ticket.charm, rank: ticket.rank };
     run = newRun(loadout, ticket.seed, ticket.look);
     practice = false;
+    saveRun(run);
   } catch (err) {
     console.warn('Deepmark: could not open a verified run, starting a practice run', err);
     await sleep(Math.max(0, MIN_SCENE_MS - (performance.now() - openedAt)));
@@ -382,11 +384,14 @@ async function verifyOnChain(finished: RunState): Promise<void> {
     verifyState = 'failed';
     canRetry = !isPermanentFailure(err);
     failedRun = finished;
+    // A refusal that waiting cannot fix means the run is gone for good, so there is nothing left to resume.
+    if (isPermanentFailure(err)) clearSavedRun();
     return;
   }
 
   const { hash, outcome } = settled;
   failedRun = null;
+  clearSavedRun();
   chainTx = hash;
   chainHeroId = outcome.hero_id ?? null;
   if (chainHeroId !== null) vaultHeroes = null;
@@ -424,6 +429,7 @@ function endExhaustedRun(state: RunState): void {
   state.relicsThisRun = 0;
   state.scoreThisRun = 0;
   practice = true;
+  clearSavedRun();
   chainStatus = 'This run grew too long to be verified.';
 }
 
@@ -433,6 +439,74 @@ const DIRS: Partial<Record<Action, [number, number]>> = {
   left: [-1, 0],
   right: [1, 0],
 };
+
+/** Books a finished run into this browser's own progress. The simulation stays free of storage so a log can be replayed safely. */
+function settleLocalProgress(finished: RunState): void {
+  const extracted = finished.resultKind === 'extracted';
+  const result = recordRun({
+    floorReached: finished.floorNumber,
+    relicsKept: finished.relicsThisRun,
+    score: finished.scoreThisRun,
+    extracted,
+    heroId: finished.heroId,
+  });
+  progress = result.progress;
+  finished.newBest = result.isNewBest && extracted;
+}
+
+/** Puts a run rebuilt from its saved log back on screen, at the point it was left. */
+function presentResumedRun(plan: Exclude<ResumePlan, { kind: 'discard' }>, ticket: RunTicket): void {
+  const resumed = plan.run;
+  resetMotion();
+  resetRelicTravel();
+  canvas.classList.remove('board-sunk');
+  chainStatus = '';
+  chainTx = '';
+  chainRank = null;
+  chainHeroId = null;
+  canRetry = false;
+  practice = false;
+  runWasVeteran = typeof ticket.veteran === 'number';
+  displayedRelics = resumed.relicsThisRun;
+  run = resumed;
+  if (plan.kind === 'continue') {
+    startAmbience(resumed.floorNumber);
+    showBanner('Run restored', FLOOR_NAMES[resumed.floorNumber] ?? '');
+    return;
+  }
+  // The run had already ended when the page went away: show its result and send the log.
+  runId += 1;
+  if (resumed.resultKind === 'dead') canvas.classList.add('board-sunk');
+  else preloadShareAssets(HEROES[resumed.heroId].veteranArt, resumed.loadout);
+  void verifyOnChain(resumed);
+}
+
+let resumeChecked = false;
+
+/**
+ * If this browser holds a saved run, asks the contract whether that very run is
+ * still open and, if so, restores it. A saved run the contract no longer knows
+ * is dropped. If Stellar cannot be read the save is kept for the next visit.
+ */
+async function resumeOpenRun(): Promise<void> {
+  if (resumeChecked || chainRead !== 'ready') return;
+  resumeChecked = true;
+  const saved = loadSavedRun();
+  if (!saved) return;
+  try {
+    const api = await chain();
+    const ticket = await api.fetchOpenRun(playerAddress);
+    if (run || starting) return;
+    const plan = planResume(saved, ticket);
+    if (plan.kind === 'discard' || !ticket) {
+      clearSavedRun();
+      return;
+    }
+    presentResumedRun(plan, ticket);
+  } catch (err) {
+    console.warn('Deepmark: could not check for an open run', err);
+  }
+}
 
 function handleEvent(event: GameEvent): void {
   switch (event.type) {
@@ -522,7 +596,7 @@ function handleEvent(event: GameEvent): void {
     case 'extracted':
       stopAmbience();
       sfxExtracted();
-      progress = loadProgress();
+      if (run) settleLocalProgress(run);
       runId += 1;
       if (run) {
         const heroId = HERO_ORDER[run.loadout.base] ?? 'lantern';
@@ -535,7 +609,7 @@ function handleEvent(event: GameEvent): void {
       sfxDead();
       triggerShake(250, 10);
       canvas.classList.add('board-sunk');
-      progress = loadProgress();
+      if (run) settleLocalProgress(run);
       runId += 1;
       if (run && !practice) void verifyOnChain(run);
       break;
@@ -719,6 +793,7 @@ onAction((action) => {
     return;
   }
 
+  const actionsBefore = run.actions.length;
   if (run.mode === 'combat') {
     if (action === 'confirm') applyAction(run, ActionCode.Attack);
     if (action === 'cancel') applyAction(run, ActionCode.Retreat);
@@ -738,6 +813,7 @@ onAction((action) => {
   }
 
   if (run.exhausted) endExhaustedRun(run);
+  if (!practice && run.actions.length !== actionsBefore) saveRun(run);
   for (const event of drainEvents(run)) handleEvent(event);
 });
 

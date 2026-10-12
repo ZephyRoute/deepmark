@@ -18,6 +18,7 @@
 #[cfg(test)]
 extern crate std;
 
+pub mod admin;
 pub mod components;
 pub mod rng;
 pub mod sim;
@@ -28,13 +29,14 @@ pub mod world;
 
 use components::{
     DataKey, FreshHero, Hero, HeroChoice, Look, PlayerRecord, PlayerSummary, RelicTokens,
-    RunOutcome, RunTicket, TopEntry, ACTIONS_PER_LEDGER, MAX_ACTIONS, MAX_HEROES_PER_OWNER,
-    MAX_PAGE, RELIC_UNIT, RUN_TTL, START_COOLDOWN_LEDGERS, TOP_SIZE, TTL_EXTEND_TO, TTL_THRESHOLD,
+    RunOutcome, RunTicket, TopEntry, ACTIONS_PER_LEDGER, CONTRACT_VERSION, MAX_ACTIONS,
+    MAX_HEROES_PER_OWNER, MAX_PAGE, RELIC_UNIT, RUN_TTL, START_COOLDOWN_LEDGERS, TOP_SIZE,
+    TTL_EXTEND_TO, TTL_THRESHOLD,
 };
 use sim::{Ending, Outcome, SimError};
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, token::StellarAssetClient, xdr::ToXdr,
-    Address, Bytes, Env, String, Vec,
+    Address, Bytes, BytesN, Env, String, Vec,
 };
 use systems::{apply_outcome, rank_key};
 use world::{Loadout, MAX_FLOOR, MAX_RANK};
@@ -54,6 +56,8 @@ pub enum Error {
     InvalidName = 9,
     HeroNotFound = 10,
     NotHeroOwner = 11,
+    /// The admin role was renounced, so the contract can no longer change.
+    Frozen = 12,
 }
 
 impl From<SimError> for Error {
@@ -122,14 +126,18 @@ pub struct DeepmarkContract;
 
 #[contractimpl]
 impl DeepmarkContract {
-    /// Sets the three relic Stellar Asset Contracts once. There is no admin
-    /// and no upgrade path: what is deployed is what runs.
+    /// Sets the admin and the three relic Stellar Asset Contracts once. The
+    /// admin must sign the deployment, so nobody can name an address they do
+    /// not control. The admin can upgrade the code until it renounces.
     pub fn __constructor(
         env: Env,
+        admin: Address,
         relic_common: Address,
         relic_rare: Address,
         relic_core: Address,
     ) {
+        admin.require_auth();
+        admin::init(&env, &admin);
         let tokens = RelicTokens {
             common: relic_common,
             rare: relic_rare,
@@ -143,6 +151,7 @@ impl DeepmarkContract {
     /// profile. A veteran must be owned by `player`.
     pub fn start_run(env: Env, player: Address, choice: HeroChoice) -> Result<RunTicket, Error> {
         player.require_auth();
+        extend_instance(&env);
 
         let (loadout, look, veteran) = match choice {
             HeroChoice::Fresh(fresh) => {
@@ -227,6 +236,7 @@ impl DeepmarkContract {
     /// log cannot be claimed twice.
     pub fn finish_run(env: Env, player: Address, actions: Bytes) -> Result<RunOutcome, Error> {
         player.require_auth();
+        extend_instance(&env);
         if actions.len() > MAX_ACTIONS {
             return Err(Error::TooManyActions);
         }
@@ -391,6 +401,32 @@ impl DeepmarkContract {
         out
     }
 
+    /// Who can upgrade the code, or `None` once the role was renounced.
+    pub fn admin(env: Env) -> Option<Address> {
+        admin::current(&env)
+    }
+
+    /// The contract release, bumped whenever behavior changes.
+    pub fn version(_env: Env) -> u32 {
+        CONTRACT_VERSION
+    }
+
+    /// Replace the contract code with an uploaded wasm. Admin only. Storage
+    /// is kept, so players, delvers and the leaderboard survive.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        admin::upgrade(&env, &new_wasm_hash)
+    }
+
+    /// Hand the admin role to `new_admin`. Both must sign.
+    pub fn set_admin(env: Env, new_admin: Address) -> Result<(), Error> {
+        admin::transfer(&env, &new_admin)
+    }
+
+    /// Give the admin role up for good. The code can never change afterwards.
+    pub fn renounce_admin(env: Env) -> Result<(), Error> {
+        admin::renounce(&env)
+    }
+
     /// The Stellar Asset Contracts that hold relics.
     pub fn relic_tokens(env: Env) -> RelicTokens {
         env.storage().instance().get(&DataKey::Relics).unwrap()
@@ -475,6 +511,14 @@ impl DeepmarkContract {
         .publish(&env);
         Ok(())
     }
+}
+
+/// Keep the contract instance (admin, relic tokens, and with it the code) alive
+/// while the game is being played.
+fn extend_instance(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
 }
 
 fn name_is_valid(name: &String) -> bool {

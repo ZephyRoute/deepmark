@@ -34,10 +34,11 @@ Status as of 2026-10-10. "Engineering" items are done in the repository and can 
 
 | Item | Owner | Status |
 |---|---|---|
-| `cargo test` | Engineering | Done 2026-10-10: 63 tests and 600 golden vectors pass |
+| `cargo test` | Engineering | Done 2026-10-11: 71 tests and 600 golden vectors pass |
 | Golden vectors current against the client | Engineering | Checked by the client workflow on every change |
 | Testnet deployment, ids published | Engineering | Done, in the README |
-| Issuer account locked | Owner | Open. Horizon on 2026-10-10 shows one signer with weight 1 on the testnet issuer. Run the deploy with `--lock` for the release deployment |
+| Issuer account locked | Engineering | Done on the 2026-10-11 testnet deployment: one signer with weight 0, and a transaction signed with its key is rejected |
+| Admin renounced or moved to a multisig | Owner | Open. The testnet admin is a single key and can upgrade the contract. Decide before mainnet and before the final submission |
 | Mainnet or an explicit statement that there is none | Owner | Open. Needs a funded deployer and presence for the transactions |
 | Standard NFT interface or an explicit list of deviations | Engineering | Done as a list of deviations, `docs/architecture/nft-standard.md` |
 | A delver visible in an explorer | Engineering | Open. The contract does not yet expose the metadata calls and events an explorer looks for |

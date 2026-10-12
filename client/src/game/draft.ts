@@ -1,5 +1,6 @@
 import { CHARMS, WEAPONS } from './items';
 import { HERO_ORDER } from './heroes';
+import { RECOMMENDED_KIT } from './kitDifficulty';
 import { CLOAK_COUNT, EMBLEM_COUNT, isValidName, type Loadout, type Look } from './loadout';
 
 /** A delver being built in the creator, kept in this browser until a run starts. */
@@ -20,7 +21,7 @@ export function randomName(): string {
 
 export function defaultDraft(): Draft {
   // The kit that clears most often in the balance simulator, so a first descent is a fair one.
-  return { look: { name: randomName(), emblem: 0, cloak: 0 }, base: 1, weapon: 1, charm: 2 };
+  return { look: { name: randomName(), emblem: 0, cloak: 0 }, ...RECOMMENDED_KIT };
 }
 
 function inRange(value: unknown, count: number): value is number {

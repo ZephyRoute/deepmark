@@ -42,18 +42,19 @@ The game is built so it is fun with the chain switched off in your head. Renderi
 
 | Item | Id |
 |---|---|
-| Game contract | `CDL7OO7MGCNMHZBF5QPJCMBLLY3ORR44TJ54ON44M25YUX6UZ7L46UZW` |
-| `DMCOMMON` contract | `CCLLVBSEXPARVM6MP5HAXOSM3FGTUR3NHZSSRFRPNJSO4KWAPTMDZS7B` |
-| `DMRARE` contract | `CCMDNYSZMHBDV3XBSGSQ5QVSNCVYMAGGPF6SAK3QDARIBT246FFYOIBT` |
-| `DMCORE` contract | `CDIYYZSMMSDXTTA5OA2C2QUJGMJRX4UP2UBR3QCUV44GJZTJBIS4BPDR` |
-| Relic issuer | `GAH27KP7NDO7HSYGIUFT7O5ONGW7M6RKCXRXIHCTLWKBM2PNU6336YMP` |
+| Game contract | `CDEAFSBG7JBN6XMP4HRL7LFBL7L67K4RJK3CIRBV23W3TJQCEADZ7R6N` |
+| `DMCOMMON` contract | `CAAFYL2QZU274NLA2IFDB4L6SUNVQKT6OLB6UXGL5L5LMQCFJXSUYFO3` |
+| `DMRARE` contract | `CC4RQ4HLTPTXMCZ3OKDL546XXJGOQ5PI2ET6U33C2XTO4BTS6AJV4ANA` |
+| `DMCORE` contract | `CC27JVKNDSUM5FDGP4JZDZTKGHJ5RJV7XHJGITTUGOUFE4DVPN6PGLMI` |
+| Relic issuer (locked) | `GAD752QFRTNEMQW2SELGHQ5VAMIV3O7H4XRLJN2K2TQFGGXKNFG7CQUK` |
+| Contract admin | `GCZCKB4FUIS5BGEMJOC3EQWKLGH662BOY3HFLH3WWPCGQJXOILDXP7GZ` |
 
 Look any of them up on [stellar.expert](https://stellar.expert/explorer/testnet). The same ids are in `client/src/stellar/config.ts`. `/stats` in the running client is a public page that lists every address with a finished run, read from the contract.
 
 ## Limitations
 
 - **Testnet only.** There is no mainnet deployment.
-- **The testnet relic issuer is not locked.** The contract is the admin of the three relic contracts, but the issuer key can still issue the assets by an ordinary payment. The deploy script locks it with `--lock` for a release deployment, and that has not been run. Details in `docs/threat-model.md`.
+- **The contract has an admin who can upgrade it.** Replay verification protects players from forged logs, not from the admin while the role exists. The role is meant to be renounced or moved to a multisig before any mainnet release. Details in `docs/threat-model.md`.
 - **Delvers are not standard NFTs.** They have an owner and transfer interface shaped like the Stellar standard and differ from it in several calls and events. Explorer support has not been tested and is not claimed. See `docs/architecture/nft-standard.md`.
 - **Seed rerolling is limited, not removed.** A cooldown and a visible abandoned run counter make it cost time. A solver can also play a legal perfect run.
 - **The key lives in the browser.** Clearing site data loses the account and its records. A passkey account is the planned replacement.

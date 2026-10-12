@@ -8,7 +8,7 @@ Research note, written on 2026-10-10. It compares the delver entry points of the
 |---|---|
 | SEP-0050, Non-Fungible Tokens | Status Draft, version 0.1.0, created and updated 2025-03-10. The file was last changed in `stellar/stellar-protocol` on 2025-06-17 (commit `d4d17e6`) |
 | OpenZeppelin `stellar-contracts`, `non_fungible` module, `NonFungibleToken` trait | Release `v0.7.2`, 2026-06-09 (commit `a9c4216`). The newest release, `v0.8.0-rc.3` of 2026-06-16, has a byte for byte identical `non_fungible/mod.rs` |
-| Deployed game contract interface | Read from testnet with `stellar contract info interface` for `CDL7OO7MGCNMHZBF5QPJCMBLLY3ORR44TJ54ON44M25YUX6UZ7L46UZW` |
+| Deployed game contract interface | Read from testnet with `stellar contract info interface` for the contract that was live when this note was written (`CDL7OO7MGCNMHZBF5QPJCMBLLY3ORR44TJ54ON44M25YUX6UZ7L46UZW`, since replaced, see the README for the current id) |
 
 SEP-0050 is a draft authored by OpenZeppelin, and the OpenZeppelin module is its reference implementation, so the two are compared together. The standard also notes a classic alternative, SEP-0039 plus a Stellar Asset Contract, and the reasons it is a poor fit (one asset per token, or fungible tokens inside one asset). Delvers carry a look, a kit and an on-chain proof, which that route cannot hold.
 
@@ -40,7 +40,7 @@ So the shape follows the standard for ownership and transfer, and does not compl
 
 **B. A separate collection contract that the game mints through.** The game contract would call a token contract that is a standard NFT. That keeps the game contract small, but the token contract needs an owner or minter role to authorise the game contract, which brings back the admin key the design deliberately does not have, and a second contract to audit.
 
-**Recommendation: A**, done together with the release deployment tracked in the mainnet readiness issue. The contract has no upgrade path, so any interface change is a redeploy, and a redeploy already needs a fresh relic issuer because a Stellar Asset Contract admin cannot be reassigned. One redeploy is cheaper than two. Delvers earned on the current testnet contract would not migrate.
+**Recommendation: A**, done together with the release deployment tracked in the mainnet readiness issue. The contract now has an admin and an upgrade path, so adding the interface no longer forces a redeploy, as long as the storage layout stays readable. A redeploy would still need a fresh relic issuer because a Stellar Asset Contract admin cannot be reassigned. Delvers earned on an earlier deployment do not migrate.
 
 Until then the README says what is true: delvers have an ownership and transfer interface shaped like the standard, and they are not standard tokens.
 

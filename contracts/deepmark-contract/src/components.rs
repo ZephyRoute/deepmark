@@ -161,6 +161,7 @@ pub struct RelicTokens {
 #[contracttype]
 pub enum DataKey {
     Relics,
+    Admin,
     PlayerCount,
     PlayerAt(u32),
     Record(Address),
@@ -175,6 +176,10 @@ pub enum DataKey {
 /// Classic assets carry seven decimals. One relic is minted as one whole unit
 /// so a wallet shows `1.0000000 DMCOMMON`, not a dust amount.
 pub const RELIC_UNIT: i128 = 10_000_000;
+
+/// Bumped by hand whenever a release changes behavior, so a client can tell
+/// which code is running after an upgrade.
+pub const CONTRACT_VERSION: u32 = 1;
 
 pub const DAY_IN_LEDGERS: u32 = 17_280;
 pub const TTL_THRESHOLD: u32 = 30 * DAY_IN_LEDGERS;

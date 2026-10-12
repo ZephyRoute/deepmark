@@ -9,7 +9,7 @@ The attacks considered against the Deepmark contract, what stops each one, and w
 - A **delver**: a character that exists because a fresh one cleared all three floors.
 - A **player's access**: nobody else can start, finish or move things for an address.
 
-There is no money in the contract and no admin or upgrade key. The worst realistic outcome of any attack below is a false leaderboard row or a relic that was not earned. That sets how much defence is proportionate.
+There is no money in the contract. It does have an admin who can upgrade it, which is the largest trust assumption and is covered under "The admin" below. Apart from the admin, the worst realistic outcome of any attack below is a false leaderboard row or a relic that was not earned. That sets how much defence is proportionate.
 
 ## Attacks
 
@@ -55,7 +55,7 @@ There is no money in the contract and no admin or upgrade key. The worst realist
 **Stops it.** The only code that mints relics is `mint_relics`, called from `finish_run` with the amounts the replay derived and only for an extraction. The only code that creates a delver is `earn_or_advance`, also inside `finish_run`, and only for a fresh delver that extracted from floor 3. The relics are Stellar Asset Contracts whose admin is the game contract, set by `scripts/deploy-testnet.sh`. Tests: `a_banked_relic_is_minted_as_a_stellar_asset`, `a_run_without_relics_mints_nothing`, `a_run_that_does_not_clear_all_three_floors_earns_nothing`. A mint failure, for example a missing trustline, is isolated with `try_mint`, so the run is still recorded. Test: `a_failed_mint_never_loses_the_verified_run`.
 
 **Remains.**
-- **The testnet issuer is not locked.** On 2026-10-10 Horizon shows one signer with weight 1 on the issuer `GAH27KP7NDO7HSYGIUFT7O5ONGW7M6RKCXRXIHCTLWKBM2PNU6336YMP`. The key holder can still issue the three classic assets by a normal payment, which bypasses the contract. The deploy script locks the issuer with `--lock`, and that has not been run for this deployment. Until a release deployment does it, the claim that only a verified extraction can mint holds for the contract and not for the key holder. This is tracked in the mainnet readiness issue.
+- **The issuer is locked, the admin is not.** The relic issuer `GAD752QFRTNEMQW2SELGHQ5VAMIV3O7H4XRLJN2K2TQFGGXKNFG7CQUK` has a single signer with weight 0 and thresholds at 0, checked on Horizon on 2026-10-11, and a transaction signed with its own key is rejected with `TxBadAuth`. So the only minter is the game contract. While the contract admin exists, the admin can upgrade the contract to code that mints without a replay. See "The admin".
 - **A missed mint is not retried.** If `try_mint` fails, the run reports `minted: false` and the relics are not issued later.
 - **Delvers move freely.** A delver can be given to anyone, which is intended. It means a delver does not prove the current holder played it, only that its first clear was verified.
 
@@ -69,6 +69,17 @@ There is no money in the contract and no admin or upgrade key. The worst realist
 - **Many accounts.** A person with many funded accounts can occupy rows, each with a real verified run. On testnet, Friendbot funds accounts for free, so the cost is only the work of playing. The board proves that a run was verified. It does not prove that a distinct person played it.
 - **Index growth.** The player index is not capped. Each entry costs its creator a funded account and the fees of a start, and the storage lifetime is extended in the same write.
 - **Exact ties.** Two runs with the same ranking key (extraction, score, floor, HP left, actions) are ordered by who got there first, because `update_top` inserts a new entry only above a strictly lower key.
+
+### The admin
+
+*Replace the contract code with code that skips the replay.*
+
+**Stops it.** `upgrade`, `set_admin` and `renounce_admin` all require the admin's signature, and handing the role over needs the signatures of both the current and the new admin, so a mistyped address cannot take it. Every change emits an event. Tests in `src/admin.rs`: `nobody_without_the_admin_signature_can_change_anything`, `the_admin_can_upgrade_and_the_swap_is_announced`, `handing_over_the_role_needs_both_signatures`, `a_new_admin_that_did_not_sign_cannot_be_installed`, `renouncing_freezes_the_contract_for_good`. After `renounce_admin` the contract rejects `upgrade` and `set_admin` with `Frozen`, which was also checked on a throwaway testnet deployment.
+
+**Remains.**
+- **While the role exists, players trust the admin.** The admin can upgrade to code that mints relics without a replay, rewrites the leaderboard or moves delvers. Replay verification protects players from forged logs, not from the admin. The testnet admin is `GCZCKB4FUIS5BGEMJOC3EQWKLGH662BOY3HFLH3WWPCGQJXOILDXP7GZ`, a single key.
+- **The way out is planned, not done.** Before any mainnet release the role is renounced, or moved with `set_admin` to a multisig account so no single key can change the code.
+- **Storage is not versioned.** An upgrade has to keep every stored key and struct readable. `version()` tells a client which release is running.
 
 ## What is not covered
 

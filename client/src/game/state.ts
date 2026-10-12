@@ -3,7 +3,6 @@ import { ENEMIES, type EnemyKind } from './enemies';
 import { buildFloor, isWalkable, MAX_FLOOR, type FloorLayout, type RelicKind } from './floor';
 import { HERO_ORDER, HEROES, type HeroId } from './heroes';
 import { statsFor, type Look, type Loadout, type Stats } from './loadout';
-import { recordRun } from './progress';
 import { mulberry32, freshSeed, type Rng } from './rng';
 
 export type Mode = 'title' | 'explore' | 'combat' | 'choice' | 'result';
@@ -80,6 +79,7 @@ export interface RunState {
   actions: number[];
   /** True when the run hit `MAX_ACTIONS` and can no longer be verified on chain. */
   exhausted: boolean;
+  /** Set by the app once the local progress is recorded, never by the simulation. */
   newBest: boolean;
   log: string[];
   events: GameEvent[];
@@ -156,20 +156,11 @@ function aliveEnemyIndexAt(state: RunState, x: number, y: number): number {
 function finishRun(state: RunState, kind: ResultKind): void {
   state.mode = 'result';
   state.resultKind = kind;
-  const relicsKept = kind === 'dead' ? 0 : state.relicsThisRun;
   if (kind === 'dead') {
     state.relicsThisRun = 0;
     state.relicsByKind = { common: 0, rare: 0, core: 0 };
     state.scoreThisRun = 0;
   }
-  const { isNewBest } = recordRun({
-    floorReached: state.floorNumber,
-    relicsKept,
-    score: state.scoreThisRun,
-    extracted: kind === 'extracted',
-    heroId: state.heroId,
-  });
-  state.newBest = isNewBest && kind === 'extracted';
   pushEvent(state, kind === 'extracted' ? { type: 'extracted' } : { type: 'dead' });
 }
 

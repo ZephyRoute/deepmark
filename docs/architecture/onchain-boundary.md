@@ -26,7 +26,8 @@ Contract: `contracts/deepmark-contract`.
 - **Leaderboard.** One sorted list of the best 100 verified runs, read in a single call, ranked by extraction, score, floor, HP left, then fewest actions. The number of players is not capped, and players are listed through a paged call.
 - **Audit.** `verify_run(hero, seed, actions)` replays any run without writing anything, so anyone can check a result from the `run_started` event and the log.
 - **Delvers.** The contract is also the registry of earned delvers: `owner_of`, `heroes_of`, `hero`, `balance` and `transfer`. Mint happens only inside `finish_run`, after the replay.
-- **Relic assets.** Three classic assets (`DMCOMMON`, `DMRARE`, `DMCORE`), each wrapped by a Stellar Asset Contract. The game contract is the admin of each. The release deployment also locks the issuer account, so nothing can mint except a verified extraction. The current testnet issuer is not locked yet, see the contract README.
+- **Relic assets.** Three classic assets (`DMCOMMON`, `DMRARE`, `DMCORE`), each wrapped by a Stellar Asset Contract. The game contract is the admin of each, and the issuer account is locked (master weight zero, no other signer), so nothing can mint except a verified extraction.
+- **Admin and upgrade.** The game contract has an admin (the deployer) that can replace its code, hand the role to another address or renounce it. While the role exists, players trust that admin not to ship code that skips the replay. Renouncing, or moving the role to a multisig, is the step that removes that trust, and is planned before any mainnet release.
 
 ## Off-chain (client)
 
@@ -42,13 +43,14 @@ Contract: `contracts/deepmark-contract`.
 - Nobody can act for an address that did not sign.
 - The client cannot choose a favourable seed.
 - Relics exist only because a verified run banked them, and anyone can see the supply.
+- Upgrades are visible: every code swap, handover and renounce emits an event, and `admin()` reports `None` once the contract is frozen.
 
 ## What it does not provide
 
 - **Seed rerolling is limited, not eliminated.** Starting another run costs a transaction and a short cooldown, and an abandoned run is counted on the profile, but a determined player can still discard seeds.
 - **A solver can play a legal perfect run.** Any deterministic game allows it. The result is still a run the game could produce, and ties are broken by HP left and fewest actions.
 - **The keypair lives in the browser.** Clearing storage loses the identity and its records. A passkey smart account is the planned replacement.
-- **Delvers are not standard NFTs.** They live in the game contract with a shape close to SEP-0050 and differ in several calls and events. The comparison and the path to comply are in `docs/architecture/nft-standard.md`, and explorer support is not claimed.
+- **Delvers are not yet standard NFTs.** They live in the game contract with a compatible shape, and the exact standard is to be verified before any claim of wallet support.
 - **Testnet only** until a mainnet deployment is made.
 
 ## Costs measured
