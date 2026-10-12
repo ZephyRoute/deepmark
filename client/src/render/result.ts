@@ -9,6 +9,7 @@
  * once per run and only calls `updateVerification` afterwards.
  */
 import { emblemIcon } from './emblems';
+import { prefersReducedMotion } from './preferences';
 
 export interface ResultSummary {
   won: boolean;
@@ -46,12 +47,8 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   return node;
 }
 
-function reduced(): boolean {
-  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
 function countUp(node: HTMLElement, to: number, suffix = '', delay = 0): void {
-  if (reduced() || to <= 0) {
+  if (prefersReducedMotion() || to <= 0) {
     node.textContent = `${to}${suffix}`;
     return;
   }
@@ -130,7 +127,7 @@ const NUDGE_KEYFRAMES: Keyframe[] = [
 /** Strikes the seal: sound and the three motions all start on this one call. */
 function strikeSeal(card: HTMLElement, seal: HTMLElement, dust: HTMLElement, onSeal?: () => void): void {
   onSeal?.();
-  if (reduced()) {
+  if (prefersReducedMotion()) {
     seal.style.opacity = '1';
     seal.style.transform = 'rotate(-4deg)';
     dust.style.opacity = '0';
@@ -152,10 +149,8 @@ export function mountResult(host: HTMLElement, summary: ResultSummary, onSeal?: 
   host.replaceChildren();
   const card = el('div', summary.won ? 'panel result result-win' : 'panel result result-loss');
 
-  card.append(
-    el('p', 'result-eyebrow', summary.won ? 'The depths let you go' : 'The depths keep what you carried'),
-    el('h2', 'result-title', summary.won ? 'Extracted' : 'Lost in the dark')
-  );
+  const title = el('h2', 'result-title', summary.won ? 'Extracted' : 'Lost in the dark');
+  card.append(el('p', 'result-eyebrow', summary.won ? 'The depths let you go' : 'The depths keep what you carried'), title);
 
   const stats = el('div', 'result-stats');
   stats.append(
@@ -248,6 +243,9 @@ export function mountResult(host: HTMLElement, summary: ResultSummary, onSeal?: 
   card.append(actions);
 
   host.append(card);
+  // Focus lands on the outcome, so a screen reader reads it and Tab reaches the buttons below.
+  title.tabIndex = -1;
+  title.focus({ preventScroll: true });
 
   let last = '';
   let sealed = false;

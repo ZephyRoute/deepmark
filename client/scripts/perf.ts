@@ -4,18 +4,30 @@
  * the background.
  *
  *   bun run build && bun run preview --port 4173 &
- *   bun run perf [url]
+ *   bun run perf [url] [--json] [--profile=laptop|ci]
+ *
+ * With --json the report goes to stdout as JSON and the human readable log to
+ * stderr. The exit code is 1 when a budget in scripts/budgets.ts is exceeded,
+ * which is what the perf workflow relies on.
  *
  * It measures a cold load (bytes, first paint, largest paint, long tasks, time
  * until the title is usable) and then plays a practice run with the Stellar
  * network blocked, sampling frame times at 1x and 4x CPU throttling.
  */
-import puppeteer, { type Page } from 'puppeteer-core';
+import type { Page } from 'puppeteer-core';
+import { blockStellar, launchBrowser } from './browser';
+import { BUDGETS, PROFILES, checkBudgets, isProfileName, type ProfileName, type Violation } from './budgets';
 
-const URL_UNDER_TEST = process.argv[2] ?? 'http://127.0.0.1:4173/';
-const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const ARGS = process.argv.slice(2);
+const JSON_OUTPUT = ARGS.includes('--json');
+const URL_UNDER_TEST = ARGS.find((a) => !a.startsWith('--')) ?? 'http://127.0.0.1:4173/';
+const PROFILE_ARG = ARGS.find((a) => a.startsWith('--profile='))?.slice('--profile='.length) ?? 'laptop';
+if (!isProfileName(PROFILE_ARG)) {
+  console.error(`Unknown profile "${PROFILE_ARG}". Use one of: ${Object.keys(PROFILES).join(', ')}.`);
+  process.exit(2);
+}
+const PROFILE: ProfileName = PROFILE_ARG;
 const SAMPLE_MS = 12_000;
-const STELLAR_HOSTS = ['soroban-testnet.stellar.org', 'horizon-testnet.stellar.org', 'friendbot.stellar.org'];
 
 interface LoadReport {
   bytesKB: number;
@@ -24,9 +36,14 @@ interface LoadReport {
   fcpMs: number | null;
   lcpMs: number | null;
   clsScore: number;
-  longTasks: { count: number; totalMs: number };
+  longTasks: { count: number; totalMs: number; maxMs: number };
   titleReadyMs: number | null;
   jsHeapMB: number;
+}
+
+/** Human readable output. Goes to stderr in --json mode so stdout stays parseable. */
+function log(...parts: unknown[]): void {
+  (JSON_OUTPUT ? console.error : console.log)(...parts);
 }
 
 interface FrameReport {
@@ -102,7 +119,7 @@ async function coldLoad(page: Page): Promise<LoadReport> {
   });
 
   const shifts = await page.evaluate(() => (window as unknown as { __shifts?: string[] }).__shifts ?? []);
-  if (shifts.length > 0) console.log('LAYOUT SHIFTS', shifts);
+  if (shifts.length > 0) log('LAYOUT SHIFTS', shifts);
   return {
     bytesKB: Math.round(bytes / 1024),
     requests,
@@ -110,7 +127,11 @@ async function coldLoad(page: Page): Promise<LoadReport> {
     fcpMs: inPage.fcp === null ? null : Math.round(inPage.fcp),
     lcpMs: inPage.lcp === null ? null : Math.round(inPage.lcp),
     clsScore: Math.round(inPage.cls * 1000) / 1000,
-    longTasks: { count: inPage.long.length, totalMs: Math.round(inPage.long.reduce((a, b) => a + b, 0)) },
+    longTasks: {
+      count: inPage.long.length,
+      totalMs: Math.round(inPage.long.reduce((a, b) => a + b, 0)),
+      maxMs: Math.round(Math.max(0, ...inPage.long)),
+    },
     titleReadyMs,
     jsHeapMB: Math.round((inPage.heap / 1024 / 1024) * 10) / 10,
   };
@@ -119,12 +140,7 @@ async function coldLoad(page: Page): Promise<LoadReport> {
 async function sampleFrames(page: Page, throttle: number): Promise<FrameReport> {
   const cdp = await page.createCDPSession();
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
-  await page.setRequestInterception(true);
-  page.on('request', (req) => {
-    const host = new URL(req.url()).host;
-    if (STELLAR_HOSTS.includes(host)) void req.abort();
-    else void req.continue();
-  });
+  await blockStellar(page);
 
   await page.goto(URL_UNDER_TEST, { waitUntil: 'load' });
   await page.waitForSelector('.title-screen', { timeout: 30_000 });
@@ -187,27 +203,31 @@ async function sampleFrames(page: Page, throttle: number): Promise<FrameReport> 
   };
 }
 
-const browser = await puppeteer.launch({
-  executablePath: CHROME,
-  headless: true,
-  args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required', '--window-size=1280,800'],
-  defaultViewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
-});
+const browser = await launchBrowser();
 
+let violations: Violation[] = [];
 try {
   const page = await browser.newPage();
   const load = await coldLoad(page);
-  console.log('COLD LOAD');
-  console.log(JSON.stringify(load, null, 2));
+  log('COLD LOAD');
+  log(JSON.stringify(load, null, 2));
 
-  const results: FrameReport[] = [];
-  for (const throttle of [1, 4]) {
+  const frames: FrameReport[] = [];
+  for (const throttle of new Set([1, PROFILES[PROFILE].throttle])) {
     const fresh = await browser.newPage();
-    results.push(await sampleFrames(fresh, throttle));
+    frames.push(await sampleFrames(fresh, throttle));
     await fresh.close();
   }
-  console.log('FRAMES (practice run, Stellar blocked, 12 s of play)');
-  console.log(JSON.stringify(results, null, 2));
+  log('FRAMES (practice run, Stellar blocked, 12 s of play)');
+  log(JSON.stringify(frames, null, 2));
+
+  violations = checkBudgets({ load, frames }, PROFILE);
+  if (JSON_OUTPUT) {
+    console.log(JSON.stringify({ url: URL_UNDER_TEST, profile: PROFILE, budgets: { ...BUDGETS, ...PROFILES[PROFILE] }, load, frames, violations }, null, 2));
+  }
+  if (violations.length === 0) log('PERF BUDGETS: all within budget');
+  else for (const v of violations) console.error(`PERF BUDGET EXCEEDED: ${v.message}`);
 } finally {
   await browser.close();
 }
+process.exit(violations.length === 0 ? 0 : 1);

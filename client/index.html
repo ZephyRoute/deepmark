@@ -16,27 +16,27 @@
 <body>
   <div id="app">
     <header class="topbar">
-      <p class="brand">Deepmark</p>
-      <p id="floor-label" class="floor-label"></p>
+      <h1 class="brand">Deepmark</h1>
+      <p id="floor-label" class="floor-label" role="status"></p>
       <button type="button" id="mute" class="btn btn-mini" data-action="mute" aria-pressed="false">Sound on</button>
     </header>
     <main class="stage-wrap">
       <div class="stage">
-        <canvas id="game" width="832" height="576">Deepmark needs a canvas-capable browser.</canvas>
+        <canvas id="game" width="832" height="576" role="img" aria-label="Dungeon board. Move with the arrow keys or WASD. What happens is announced in the run log.">Deepmark needs a canvas-capable browser.</canvas>
         <div id="hint" class="hint-card" role="status" hidden></div>
         <section id="overlay" class="overlay" hidden></section>
       </div>
     </main>
-    <section id="hud" class="hud" hidden>
+    <section id="hud" class="hud" aria-label="Run status" hidden>
       <div class="hud-stats">
         <span id="hud-name"></span>
-        <span id="hud-hp" class="hud-hp"><span class="hp-track"><span id="hp-ghost" class="hp-ghost"></span><span id="hp-fill" class="hp-fill"></span></span><span id="hp-text" class="hp-text"></span></span>
+        <span id="hud-hp" class="hud-hp" role="img" aria-label="Health"><span class="hp-track"><span id="hp-ghost" class="hp-ghost"></span><span id="hp-fill" class="hp-fill"></span></span><span id="hp-text" class="hp-text"></span></span>
         <span id="hud-relics"></span>
         <span id="hud-score"></span>
         <span id="hud-mode"></span>
         <span class="hud-key"><span class="swatch swatch-open"></span>Open<span class="swatch swatch-block"></span>Blocked</span>
       </div>
-      <p id="hud-log" class="hud-log"></p>
+      <p id="hud-log" class="hud-log" role="log"></p>
     </section>
     <nav class="touch" aria-label="Touch controls">
       <div class="pad">

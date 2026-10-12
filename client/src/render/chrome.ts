@@ -77,6 +77,10 @@ export interface ChromeView {
   onSeal: () => void;
 }
 
+/** The slice of the view each card reads, so a card can be mounted on its own for previews and checks. */
+export type VaultView = Pick<ChromeView, 'vaultLoading' | 'vaultHeroes' | 'onVeteran'>;
+export type LeaderboardView = Pick<ChromeView, 'boardTab' | 'leaderboardLoading' | 'leaderboardRows' | 'playerAddress' | 'justVerified'>;
+
 const TX_HASH = /^[a-f0-9]{64}$/;
 
 function relicSummary(relics: RelicBalances | null): string {
@@ -128,6 +132,9 @@ function setBumpText(id: string, value: string): void {
   node.classList.add('bump');
 }
 
+/** The bar turns red at or below this share of max health. A low state is also spoken, so colour is not the only cue. */
+const LOW_HEALTH_RATIO = 0.34;
+
 function paintHp(hp: number, max: number): void {
   const ratio = max > 0 ? Math.max(0, Math.min(1, hp / max)) : 0;
   const fill = document.getElementById('hp-fill');
@@ -136,11 +143,28 @@ function paintHp(hp: number, max: number): void {
   const pct = `${(ratio * 100).toFixed(1)}%`;
   if (fill) fill.style.width = pct;
   if (ghost) ghost.style.width = pct;
-  if (bar) bar.classList.toggle('is-low', ratio <= 0.34);
+  if (bar) {
+    bar.classList.toggle('is-low', ratio <= LOW_HEALTH_RATIO);
+    bar.setAttribute('aria-label', `Health ${hp} of ${max}${ratio <= LOW_HEALTH_RATIO ? ', low' : ''}`);
+  }
   setText('hp-text', `${hp} / ${max}`);
 }
 
 let overlayKey = '';
+
+/** Screens a player leaves with Back or Escape. Returning to the title from one of these restores focus. */
+const PANEL_KEYS: readonly string[] = ['creator', 'vault', 'board', 'stats', 'result'];
+
+/**
+ * Puts focus on a panel's heading when it opens, so a keyboard or screen
+ * reader player lands on the new screen and Tab reaches its first control.
+ */
+function focusPanelHeading(overlay: HTMLElement): void {
+  const heading = overlay.querySelector<HTMLElement>('.panel-title');
+  if (!heading) return;
+  heading.tabIndex = -1;
+  heading.focus({ preventScroll: true });
+}
 
 function renderOverlay(view: ChromeView): void {
   const overlay = document.getElementById('overlay');
@@ -151,6 +175,7 @@ function renderOverlay(view: ChromeView): void {
     if (key === 'title') updateTitle(titleInfo(view));
     return;
   }
+  const previousKey = overlayKey;
   overlayKey = key;
   overlay.replaceChildren();
 
@@ -169,18 +194,21 @@ function renderOverlay(view: ChromeView): void {
   if (view.showVault) {
     overlay.hidden = false;
     overlay.append(vaultCard(view));
+    focusPanelHeading(overlay);
     return;
   }
 
   if (view.showLeaderboard) {
     overlay.hidden = false;
     overlay.append(leaderboardCard(view));
+    focusPanelHeading(overlay);
     return;
   }
 
   if (view.showStats) {
     overlay.hidden = false;
     overlay.append(statsCard(view));
+    focusPanelHeading(overlay);
     return;
   }
 
@@ -189,6 +217,9 @@ function renderOverlay(view: ChromeView): void {
     const info = titleInfo(view);
     if (overlay.querySelector('.title-v2')) updateTitle(info);
     else mountTitle(overlay, info);
+    if (PANEL_KEYS.some((panel) => previousKey.startsWith(panel))) {
+      overlay.querySelector<HTMLElement>('.menu-item.is-primary')?.focus({ preventScroll: true });
+    }
     return;
   }
 
@@ -259,7 +290,7 @@ function titleInfo(view: ChromeView): TitleInfo {
   return { local, chain, vault: held ? `Relics in your vault: ${held}` : '' };
 }
 
-function leaderboardCard(view: ChromeView): HTMLElement {
+export function leaderboardCard(view: LeaderboardView): HTMLElement {
   const card = el('div', 'panel panel-scroll');
   card.append(el('h2', 'panel-title', 'Leaderboard'));
   card.append(
@@ -316,7 +347,7 @@ function leaderboardCard(view: ChromeView): HTMLElement {
   return card;
 }
 
-function vaultCard(view: ChromeView): HTMLElement {
+export function vaultCard(view: VaultView): HTMLElement {
   const wrap = el('div', 'vault-view');
   wrap.append(el('div', 'vault-backdrop'));
 
@@ -349,7 +380,7 @@ function vaultCard(view: ChromeView): HTMLElement {
   return wrap;
 }
 
-function heroCard(hero: Hero, view: ChromeView): HTMLElement {
+function heroCard(hero: Hero, view: VaultView): HTMLElement {
   const item = el('article', 'vault-card');
   const baseId = HERO_ORDER[hero.base] ?? 'lantern';
   const portrait = el('img', 'vault-portrait');
@@ -548,7 +579,7 @@ function choiceCard(run: RunState, onDescendHover: (hovering: boolean) => void):
       const icon = el('img', 'choice-relic-icon');
       icon.src = `/art/relic-${kind}.webp`;
       icon.alt = '';
-      chip.append(icon, el('span', '', `×${run.relicsByKind[kind]}`));
+      chip.append(icon, el('span', 'sr-only', `${kind} relics `), el('span', '', `×${run.relicsByKind[kind]}`));
       relicRow.append(chip);
     }
     stake.append(relicRow);

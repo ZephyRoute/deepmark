@@ -1,3 +1,5 @@
+import { isScreenPreview, mountScreenPreview } from './preview/screens';
+
 function isPublicStatsPath(path: string): boolean {
   return path.replace(/\/+$/, '') === '/stats';
 }
@@ -9,14 +11,15 @@ const previewMode = isLocal ? new URLSearchParams(window.location.search).get('p
 const previewDescent = previewMode === 'descent';
 const previewResult = previewMode === 'result';
 const previewBoard = previewMode === 'board';
+const previewScreen = isScreenPreview(previewMode) ? previewMode : null;
 
 // The public page is also a real document at /stats/. A dev server that was
 // started before that document existed answers /stats with the game shell.
 // Mount the metrics here so the All players link still opens them.
 if (previewDescent) {
-  const host = document.createElement('div');
-  host.style.cssText = 'position:fixed;inset:0;background:#05060b';
-  document.body.replaceChildren(host);
+  // Mounted in the real shell's overlay, as the game does.
+  const host = document.getElementById('overlay') ?? document.body;
+  host.hidden = false;
   void Promise.all([import('./render/descent')]).then(([scene]) => {
     scene.mountDescent(host, {
       art: 'cinder.webp',
@@ -33,10 +36,9 @@ if (previewDescent) {
 } else if (previewResult) {
   // http://localhost:5173/?preview=result&hero=1&loss=1
   const params = new URLSearchParams(window.location.search);
-  const host = document.createElement('div');
-  host.id = 'overlay';
-  host.className = 'overlay';
-  document.body.replaceChildren(host);
+  // Mounted in the real shell, so landmarks and styles match the game.
+  const host = document.getElementById('overlay') ?? document.body;
+  host.hidden = false;
   void Promise.all([import('./render/result')]).then(([scene]) => {
     const lost = params.get('loss') === '1';
     scene.mountResult(host, {
@@ -62,6 +64,9 @@ if (previewDescent) {
       });
     }, 4500);
   });
+} else if (previewScreen) {
+  // http://localhost:5173/?preview=vault or ?preview=leaderboard
+  mountScreenPreview(previewScreen);
 } else if (previewBoard) {
   // http://localhost:5173/?preview=board shows the three floors with no chain call.
   void Promise.all([import('./render/canvas'), import('./game/state'), import('./game/floor'), import('./game/enemies')]).then(
