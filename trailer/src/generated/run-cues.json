@@ -1,0 +1,817 @@
+[
+ {
+  "t": 12.432,
+  "index": 0,
+  "action": 3,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 0,
+  "events": [],
+  "player": {
+   "x": 3,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 12.767,
+  "index": 1,
+  "action": 3,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 0,
+  "events": [],
+  "player": {
+   "x": 4,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 13.104,
+  "index": 2,
+  "action": 3,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 0,
+  "events": [],
+  "player": {
+   "x": 5,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 13.435,
+  "index": 3,
+  "action": 3,
+  "floor": 1,
+  "mode": "combat",
+  "hp": 8,
+  "relics": 0,
+  "events": [
+   "combatStart"
+  ],
+  "player": {
+   "x": 5,
+   "y": 4
+  },
+  "enemy": {
+   "x": 6,
+   "y": 4
+  }
+ },
+ {
+  "t": 13.769,
+  "index": 4,
+  "action": 4,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 0,
+  "events": [
+   "enemyHit",
+   "enemyDied"
+  ],
+  "player": {
+   "x": 5,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 14.494,
+  "index": 5,
+  "action": 3,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 0,
+  "events": [],
+  "player": {
+   "x": 6,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 14.825,
+  "index": 6,
+  "action": 3,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [
+   "relic"
+  ],
+  "player": {
+   "x": 7,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 15.158,
+  "index": 7,
+  "action": 2,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 6,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 15.489,
+  "index": 8,
+  "action": 2,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 5,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 15.821,
+  "index": 9,
+  "action": 0,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 5,
+   "y": 3
+  },
+  "enemy": null
+ },
+ {
+  "t": 16.153,
+  "index": 10,
+  "action": 0,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 5,
+   "y": 2
+  },
+  "enemy": null
+ },
+ {
+  "t": 16.485,
+  "index": 11,
+  "action": 0,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 5,
+   "y": 1
+  },
+  "enemy": null
+ },
+ {
+  "t": 16.819,
+  "index": 12,
+  "action": 3,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 6,
+   "y": 1
+  },
+  "enemy": null
+ },
+ {
+  "t": 17.151,
+  "index": 13,
+  "action": 3,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 7,
+   "y": 1
+  },
+  "enemy": null
+ },
+ {
+  "t": 17.486,
+  "index": 14,
+  "action": 1,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 7,
+   "y": 2
+  },
+  "enemy": null
+ },
+ {
+  "t": 17.819,
+  "index": 15,
+  "action": 3,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 8,
+   "y": 2
+  },
+  "enemy": null
+ },
+ {
+  "t": 18.154,
+  "index": 16,
+  "action": 1,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 8,
+   "y": 3
+  },
+  "enemy": null
+ },
+ {
+  "t": 18.487,
+  "index": 17,
+  "action": 3,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 9,
+   "y": 3
+  },
+  "enemy": null
+ },
+ {
+  "t": 18.819,
+  "index": 18,
+  "action": 1,
+  "floor": 1,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 9,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 19.152,
+  "index": 19,
+  "action": 3,
+  "floor": 1,
+  "mode": "choice",
+  "hp": 8,
+  "relics": 1,
+  "events": [
+   "floorCleared"
+  ],
+  "player": {
+   "x": 10,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 19.484,
+  "index": 20,
+  "action": 6,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [
+   "descended"
+  ],
+  "player": {
+   "x": 2,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 23.087,
+  "index": 21,
+  "action": 0,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 2,
+   "y": 3
+  },
+  "enemy": null
+ },
+ {
+  "t": 23.419,
+  "index": 22,
+  "action": 0,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 2,
+   "y": 2
+  },
+  "enemy": null
+ },
+ {
+  "t": 23.753,
+  "index": 23,
+  "action": 0,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 2,
+   "y": 1
+  },
+  "enemy": null
+ },
+ {
+  "t": 24.089,
+  "index": 24,
+  "action": 3,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 3,
+   "y": 1
+  },
+  "enemy": null
+ },
+ {
+  "t": 24.421,
+  "index": 25,
+  "action": 3,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 4,
+   "y": 1
+  },
+  "enemy": null
+ },
+ {
+  "t": 24.752,
+  "index": 26,
+  "action": 3,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 5,
+   "y": 1
+  },
+  "enemy": null
+ },
+ {
+  "t": 25.087,
+  "index": 27,
+  "action": 3,
+  "floor": 2,
+  "mode": "combat",
+  "hp": 8,
+  "relics": 1,
+  "events": [
+   "combatStart"
+  ],
+  "player": {
+   "x": 5,
+   "y": 1
+  },
+  "enemy": {
+   "x": 6,
+   "y": 1
+  }
+ },
+ {
+  "t": 25.421,
+  "index": 28,
+  "action": 4,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [
+   "enemyHit",
+   "enemyDied"
+  ],
+  "player": {
+   "x": 5,
+   "y": 1
+  },
+  "enemy": null
+ },
+ {
+  "t": 26.143,
+  "index": 29,
+  "action": 3,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 6,
+   "y": 1
+  },
+  "enemy": null
+ },
+ {
+  "t": 26.475,
+  "index": 30,
+  "action": 3,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 7,
+   "y": 1
+  },
+  "enemy": null
+ },
+ {
+  "t": 26.806,
+  "index": 31,
+  "action": 1,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 7,
+   "y": 2
+  },
+  "enemy": null
+ },
+ {
+  "t": 27.145,
+  "index": 32,
+  "action": 3,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 8,
+   "y": 2
+  },
+  "enemy": null
+ },
+ {
+  "t": 27.477,
+  "index": 33,
+  "action": 1,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 8,
+   "y": 3
+  },
+  "enemy": null
+ },
+ {
+  "t": 27.808,
+  "index": 34,
+  "action": 3,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 9,
+   "y": 3
+  },
+  "enemy": null
+ },
+ {
+  "t": 28.141,
+  "index": 35,
+  "action": 1,
+  "floor": 2,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 9,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 28.472,
+  "index": 36,
+  "action": 3,
+  "floor": 2,
+  "mode": "choice",
+  "hp": 8,
+  "relics": 1,
+  "events": [
+   "floorCleared"
+  ],
+  "player": {
+   "x": 10,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 28.805,
+  "index": 37,
+  "action": 6,
+  "floor": 3,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [
+   "descended"
+  ],
+  "player": {
+   "x": 2,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 32.412,
+  "index": 38,
+  "action": 3,
+  "floor": 3,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 3,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 32.743,
+  "index": 39,
+  "action": 3,
+  "floor": 3,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 4,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 33.073,
+  "index": 40,
+  "action": 3,
+  "floor": 3,
+  "mode": "explore",
+  "hp": 8,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 5,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 33.404,
+  "index": 41,
+  "action": 3,
+  "floor": 3,
+  "mode": "combat",
+  "hp": 8,
+  "relics": 1,
+  "events": [
+   "combatStart"
+  ],
+  "player": {
+   "x": 5,
+   "y": 4
+  },
+  "enemy": {
+   "x": 6,
+   "y": 4
+  }
+ },
+ {
+  "t": 33.739,
+  "index": 42,
+  "action": 4,
+  "floor": 3,
+  "mode": "combat",
+  "hp": 5,
+  "relics": 1,
+  "events": [
+   "enemyHit",
+   "playerHit"
+  ],
+  "player": {
+   "x": 5,
+   "y": 4
+  },
+  "enemy": {
+   "x": 6,
+   "y": 4
+  }
+ },
+ {
+  "t": 34.465,
+  "index": 43,
+  "action": 4,
+  "floor": 3,
+  "mode": "combat",
+  "hp": 1,
+  "relics": 1,
+  "events": [
+   "enemyHit",
+   "playerHit"
+  ],
+  "player": {
+   "x": 5,
+   "y": 4
+  },
+  "enemy": {
+   "x": 6,
+   "y": 4
+  }
+ },
+ {
+  "t": 35.187,
+  "index": 44,
+  "action": 4,
+  "floor": 3,
+  "mode": "explore",
+  "hp": 1,
+  "relics": 1,
+  "events": [
+   "enemyHit",
+   "enemyDied"
+  ],
+  "player": {
+   "x": 5,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 35.911,
+  "index": 45,
+  "action": 3,
+  "floor": 3,
+  "mode": "explore",
+  "hp": 1,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 6,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 36.244,
+  "index": 46,
+  "action": 3,
+  "floor": 3,
+  "mode": "explore",
+  "hp": 1,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 7,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 36.578,
+  "index": 47,
+  "action": 3,
+  "floor": 3,
+  "mode": "explore",
+  "hp": 1,
+  "relics": 1,
+  "events": [],
+  "player": {
+   "x": 8,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 36.91,
+  "index": 48,
+  "action": 3,
+  "floor": 3,
+  "mode": "explore",
+  "hp": 1,
+  "relics": 2,
+  "events": [
+   "relic"
+  ],
+  "player": {
+   "x": 9,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 37.243,
+  "index": 49,
+  "action": 3,
+  "floor": 3,
+  "mode": "explore",
+  "hp": 1,
+  "relics": 2,
+  "events": [],
+  "player": {
+   "x": 10,
+   "y": 4
+  },
+  "enemy": null
+ },
+ {
+  "t": 37.579,
+  "index": 50,
+  "action": 3,
+  "floor": 3,
+  "mode": "result",
+  "hp": 1,
+  "relics": 2,
+  "events": [
+   "extracted"
+  ],
+  "player": {
+   "x": 11,
+   "y": 4
+  },
+  "enemy": null
+ }
+]

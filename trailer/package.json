@@ -1,0 +1,35 @@
+{
+  "name": "deepmark-trailer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "scripts": {
+    "studio": "remotion studio",
+    "typecheck": "tsc --noEmit",
+    "capture": "bun run capture/record.ts",
+    "sync": "bun run scripts/sync-assets.ts",
+    "audio": "bun run audio/synth.ts",
+    "render:30": "remotion render src/index.ts Trailer30 out/deepmark-trailer-30s.mp4 --crf=22 --x264-preset=slow --audio-codec=aac --audio-bitrate=160k --log=warn",
+    "render:90": "remotion render src/index.ts Trailer90 out/deepmark-trailer-90s.mp4 --crf=20 --x264-preset=slow --audio-codec=aac --audio-bitrate=192k --log=warn",
+    "media": "bun run scripts/readme-media.ts",
+    "render:card": "remotion render src/index.ts ShareCard out/deepmark-share-card.mp4 --crf=22 --x264-preset=slow --log=warn",
+    "build:all": "bun run sync && bun run audio && bun run capture && bun run render:30 && bun run render:90 && bun run render:card && bun run media"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.534",
+    "@remotion/google-fonts": "^4.0.534",
+    "@remotion/media": "^4.0.534",
+    "@remotion/transitions": "^4.0.534",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "remotion": "^4.0.534"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "puppeteer-core": "^25.13.0",
+    "typescript": "^7.0.2"
+  }
+}

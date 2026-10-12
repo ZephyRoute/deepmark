@@ -1,0 +1,7 @@
+node_modules/
+out/
+# Recorded from the game and rebuilt by `bun run capture`.
+public/footage/
+public/art/
+public/audio/
+public/fx/
