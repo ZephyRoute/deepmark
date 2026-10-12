@@ -54,7 +54,7 @@ Look any of them up on [stellar.expert](https://stellar.expert/explorer/testnet)
 
 - **Testnet only.** There is no mainnet deployment.
 - **The testnet relic issuer is not locked.** The contract is the admin of the three relic contracts, but the issuer key can still issue the assets by an ordinary payment. The deploy script locks it with `--lock` for a release deployment, and that has not been run. Details in `docs/threat-model.md`.
-- **Delvers are not standard NFTs.** They have an owner and transfer interface shaped like the Stellar standard and differ from it in several calls and events. No wallet or explorer support is claimed. See `docs/architecture/nft-standard.md`.
+- **Delvers are not standard NFTs.** They have an owner and transfer interface shaped like the Stellar standard and differ from it in several calls and events. Explorer support has not been tested and is not claimed. See `docs/architecture/nft-standard.md`.
 - **Seed rerolling is limited, not removed.** A cooldown and a visible abandoned run counter make it cost time. A solver can also play a legal perfect run.
 - **The key lives in the browser.** Clearing site data loses the account and its records. A passkey account is the planned replacement.
 - **No third party audit.** The review that exists is described in `docs/threat-model.md`.
@@ -94,4 +94,4 @@ The contract API, the action encoding and the trust model are in `contracts/deep
 
 ## Licence
 
-Dual licensed under either of [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option. This matches the `license` field of the contract crate.
+Licensed under the [Apache License 2.0](LICENSE).

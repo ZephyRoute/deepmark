@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 description = "records Deepmark run results and a leaderboard on Soroban"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

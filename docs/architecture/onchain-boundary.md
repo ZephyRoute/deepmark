@@ -48,7 +48,7 @@ Contract: `contracts/deepmark-contract`.
 - **Seed rerolling is limited, not eliminated.** Starting another run costs a transaction and a short cooldown, and an abandoned run is counted on the profile, but a determined player can still discard seeds.
 - **A solver can play a legal perfect run.** Any deterministic game allows it. The result is still a run the game could produce, and ties are broken by HP left and fewest actions.
 - **The keypair lives in the browser.** Clearing storage loses the identity and its records. A passkey smart account is the planned replacement.
-- **Delvers are not standard NFTs.** They live in the game contract with a shape close to SEP-0050 and differ in several calls and events. The comparison and the path to comply are in `docs/architecture/nft-standard.md`, and no wallet support is claimed.
+- **Delvers are not standard NFTs.** They live in the game contract with a shape close to SEP-0050 and differ in several calls and events. The comparison and the path to comply are in `docs/architecture/nft-standard.md`, and explorer support is not claimed.
 - **Testnet only** until a mainnet deployment is made.
 
 ## Costs measured

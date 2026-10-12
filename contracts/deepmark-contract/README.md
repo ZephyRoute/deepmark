@@ -43,7 +43,7 @@ Delvers are not standard tokens. The shape follows the `NonFungibleToken` interf
 - No `transfer_from`, `approve`, `approve_for_all`, `get_approved`, `is_approved_for_all`, `name`, `symbol` or `token_uri`.
 - Events are `hero_transfer` and `hero_earned`, not the standard `transfer` and `mint`.
 - An owner can hold at most 64 delvers, and `transfer` refuses a recipient at the cap.
-- Wallet and explorer visibility has not been tested, and no support is claimed.
+- Explorer visibility has not been tested, and no support is claimed.
 
 The comparison, the two ways to comply and the recommendation are in `docs/architecture/nft-standard.md`.
 

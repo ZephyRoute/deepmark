@@ -17,7 +17,7 @@ Status as of 2026-10-10. "Engineering" items are done in the repository and can 
 | Every README claim traceable to code, a test or an id on the explorer | Engineering | Done for this version. Re-read after any later edit |
 | No em dash in public text | Engineering | Done for the working tree: the only occurrence is the rule quoted in `CLAUDE.md`. Git history contains older ones (9 outside `.claude/` on 2026-10-10) and has not been rewritten |
 | No AI sounding filler in public text | Owner | Open. Final read of README and docs by a person |
-| Licence file | Engineering | Done. `LICENSE-MIT` and `LICENSE-APACHE` at the root, matching `MIT OR Apache-2.0` in `Cargo.toml` |
+| Licence file | Engineering | Done. Apache 2.0 in `LICENSE`, and the contract crate declares `Apache-2.0` |
 | `.claude/` toolkit files in the tree | Owner | Open. 169 tracked files of third party skills. Decide whether they belong in the public repository. History also holds a merge titled `add-toolkit-claude` |
 | Dependency licence audit | Owner | Open |
 | Live link in the README | Owner | Open. The game has no public deployment yet, and the repository is private |
@@ -40,7 +40,7 @@ Status as of 2026-10-10. "Engineering" items are done in the repository and can 
 | Issuer account locked | Owner | Open. Horizon on 2026-10-10 shows one signer with weight 1 on the testnet issuer. Run the deploy with `--lock` for the release deployment |
 | Mainnet or an explicit statement that there is none | Owner | Open. Needs a funded deployer and presence for the transactions |
 | Standard NFT interface or an explicit list of deviations | Engineering | Done as a list of deviations, `docs/architecture/nft-standard.md` |
-| A delver visible in a wallet or an explorer | Owner | Open. Needs a wallet and an account that holds a delver, and as of now the contract does not expose what wallets look for |
+| A delver visible in an explorer | Engineering | Open. The contract does not yet expose the metadata calls and events an explorer looks for |
 
 ## Client quality
 
