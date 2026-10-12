@@ -1,6 +1,6 @@
 # Deepmark
 
-Deepmark is a turn-based dungeon-crawler roguelite with a bank-or-push extraction mechanic, built on Stellar/Soroban for the Find Your Way Meridian Hackathon (submission deadline: October 5, 2026, 4:00 PM Costa Rica time). See `docs/architecture/onchain-boundary.md` for what lives on-chain and why.
+Deepmark is a turn-based dungeon-crawler roguelite with a bank-or-push extraction mechanic, built on Stellar/Soroban for the Find Your Way Meridian Hackathon (submission deadline: October 12, 2026). See `docs/architecture/onchain-boundary.md` for what lives on-chain and why.
 
 ## Mission
 
