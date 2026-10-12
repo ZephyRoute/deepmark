@@ -91,3 +91,7 @@ GitHub Actions runs the client checks when `client/` changes, the contract check
 | `docs/submission-checklist.md` | What is done and what is still open |
 
 The contract API, the action encoding and the trust model are in `contracts/deepmark-contract/README.md`.
+
+## Licence
+
+Dual licensed under either of [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option. This matches the `license` field of the contract crate.
