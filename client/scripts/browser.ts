@@ -5,11 +5,7 @@ const DEFAULT_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Ch
 const VIEWPORT = { width: 1280, height: 800, deviceScaleFactor: 1 } as const;
 
 /** Hosts the game talks to. Blocking them forces the offline practice run. */
-export const STELLAR_HOSTS: readonly string[] = [
-  'soroban-testnet.stellar.org',
-  'horizon-testnet.stellar.org',
-  'friendbot.stellar.org',
-];
+export const STELLAR_HOSTS: readonly string[] = ['soroban-testnet.stellar.org', 'horizon-testnet.stellar.org', 'friendbot.stellar.org'];
 
 export async function launchBrowser(): Promise<Browser> {
   return puppeteer.launch({

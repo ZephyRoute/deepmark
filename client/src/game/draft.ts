@@ -2,6 +2,7 @@ import { CHARMS, WEAPONS } from './items';
 import { HERO_ORDER } from './heroes';
 import { RECOMMENDED_KIT } from './kitDifficulty';
 import { CLOAK_COUNT, EMBLEM_COUNT, isValidName, type Loadout, type Look } from './loadout';
+import { readJson, writeJson } from '../storage';
 
 /** A delver being built in the creator, kept in this browser until a run starts. */
 export interface Draft {
@@ -41,24 +42,12 @@ function sanitize(raw: unknown): Draft | null {
 }
 
 export function loadDraft(): Draft {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const draft = sanitize(JSON.parse(raw));
-      if (draft) return draft;
-    }
-  } catch {
-    // Private mode or corrupt data: fall through to a fresh draft.
-  }
-  return defaultDraft();
+  // Missing or corrupt data falls through to a fresh draft.
+  return sanitize(readJson(STORAGE_KEY)) ?? defaultDraft();
 }
 
 export function saveDraft(draft: Draft): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
-  } catch {
-    // The draft still lasts for this tab.
-  }
+  writeJson(STORAGE_KEY, draft);
 }
 
 export function loadoutOf(draft: Draft): Loadout {

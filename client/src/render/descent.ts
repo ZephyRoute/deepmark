@@ -6,6 +6,7 @@
  * dark. Restraint is the point: nothing here tries to look like a loading bar.
  */
 import { emblemIcon } from './emblems';
+import { waitState } from './descentWait';
 import { prefersReducedMotion } from './preferences';
 
 export interface DescentOptions {
@@ -17,6 +18,8 @@ export interface DescentOptions {
   emblem: number;
   /** One line describing the kit, such as "Cinder  ·  Reaver Hook  ·  Stone Heart". */
   kit: string;
+  /** Starts a practice run right away. When absent the scene never offers the button. */
+  onSkip?: () => void;
 }
 
 export type DescentStage = 'account' | 'opening' | 'ready' | 'offline';
@@ -40,6 +43,7 @@ const TIPS: readonly string[] = [
 ];
 
 const TIP_MS = 3600;
+const WAIT_POLL_MS = 500;
 const EMBER_COUNT = 34;
 
 let setStageRef: ((stage: DescentStage) => void) | null = null;
@@ -126,7 +130,16 @@ export function mountDescent(host: HTMLElement, options: DescentOptions): void {
   const status = el('p', 'descent-status', STAGE_TEXT.account);
   status.setAttribute('role', 'status');
   const tip = el('p', 'descent-tip');
-  progress.append(steps, status, tip);
+  const slowNote = el('p', 'descent-slow', 'Stellar is taking a little longer than usual. Your run will open as soon as it can.');
+  slowNote.hidden = true;
+  const skip = el('button', 'btn descent-skip', 'Play a practice run now');
+  skip.type = 'button';
+  skip.hidden = true;
+  skip.addEventListener('click', () => {
+    skip.disabled = true;
+    options.onSkip?.();
+  });
+  progress.append(steps, status, slowNote, skip, tip);
 
   root.append(art, light, dust, grain, shade, dossier, progress);
   host.append(root);
@@ -152,7 +165,19 @@ export function mountDescent(host: HTMLElement, options: DescentOptions): void {
   }
   paintSteps(0, false);
 
+  // After a few calm seconds the scene says so, then offers a way out that never blocks the chain queue.
+  let stageNow: DescentStage = 'account';
+  const shownAt = performance.now();
+  function paintWait(): void {
+    const wait = waitState(performance.now() - shownAt, stageNow);
+    slowNote.hidden = !wait.slow;
+    skip.hidden = !options.onSkip || !wait.canSkip;
+  }
+  const waitTimer = window.setInterval(paintWait, WAIT_POLL_MS);
+
   setStageRef = (stage) => {
+    stageNow = stage;
+    paintWait();
     status.textContent = STAGE_TEXT[stage];
     if (stage === 'account') paintSteps(0, false);
     if (stage === 'opening') paintSteps(1, false);
@@ -219,6 +244,7 @@ export function mountDescent(host: HTMLElement, options: DescentOptions): void {
     if (!root.isConnected) {
       running = false;
       window.clearInterval(tipTimer);
+      window.clearInterval(waitTimer);
       if (setStageRef) setStageRef = null;
       observer.disconnect();
     }

@@ -8,8 +8,10 @@
  * Like the creator, this component owns its DOM. The overlay renderer mounts it
  * once per run and only calls `updateVerification` afterwards.
  */
+import { DELVER_EARNED_KICKER, delverGrewKicker } from '../game/delverOutcome';
 import { emblemIcon } from './emblems';
 import { prefersReducedMotion } from './preferences';
+import { sigilIcon } from './sigil';
 
 export interface ResultSummary {
   won: boolean;
@@ -31,8 +33,13 @@ export interface Verification {
   message: string;
   rank: number | null;
   txUrl: string | null;
+  /** A fresh delver was minted by this run (its first full clear). */
   heroEarned: boolean;
+  /** A veteran cleared again: no new delver, but its clear count rose. Null clears means the count is not known yet. */
+  delverGrew?: { clears: number | null } | null;
   canRetry: boolean;
+  /** A fresh account's first verified win: gently point at Your record so the delver is never lost. */
+  recordNudge?: boolean;
 }
 
 const STORY: Record<'pending' | 'waiting', string> = {
@@ -58,7 +65,7 @@ function countUp(node: HTMLElement, to: number, suffix = '', delay = 0): void {
     const start = performance.now();
     const step = (now: number): void => {
       const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
+      const eased = 1 - (1 - t) ** 3;
       node.textContent = `${Math.round(to * eased)}${suffix}`;
       if (t < 1) requestAnimationFrame(step);
     };
@@ -73,37 +80,6 @@ function stat(label: string, value: number, suffix: string, delay: number): HTML
   countUp(number, value, suffix, delay + 200);
   tile.append(number, el('span', 'result-stat-label', label));
   return tile;
-}
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
-function path(d: string, className: string): SVGPathElement {
-  const node = document.createElementNS(SVG_NS, 'path');
-  node.setAttribute('d', d);
-  node.setAttribute('class', className);
-  return node;
-}
-
-/**
- * The Deepmark sigil: the carved triangle-and-eye mark from the stone logo
- * (`/art/logo-lockup.webp`), redrawn as an inline vector so the seal is the
- * game's own mark instead of a generic check-in-a-ring.
- */
-function sigilIcon(): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 64 64');
-  svg.setAttribute('class', 'seal-icon');
-  svg.setAttribute('aria-hidden', 'true');
-  const outer = path('M32 9 L53 51 L11 51 Z', 'seal-outer');
-  const inner = path('M23 19 L41 19 L32 31 Z', 'seal-inner');
-  const eye = path('M21 41 Q32 34 43 41 Q32 48 21 41 Z', 'seal-eye');
-  const pupil = document.createElementNS(SVG_NS, 'circle');
-  pupil.setAttribute('cx', '32');
-  pupil.setAttribute('cy', '41');
-  pupil.setAttribute('r', '2.4');
-  pupil.setAttribute('class', 'seal-pupil');
-  svg.append(outer, inner, eye, pupil);
-  return svg;
 }
 
 const STRIKE_KEYFRAMES: Keyframe[] = [
@@ -161,7 +137,7 @@ export function mountResult(host: HTMLElement, summary: ResultSummary, onSeal?: 
   );
   card.append(stats);
   if (summary.newBest) card.append(el('p', 'new-best', 'New best'));
-  card.append(el('p', 'stats', summary.bestLine));
+  if (summary.bestLine) card.append(el('p', 'stats', summary.bestLine));
 
   // The replay ribbon: one pip per floor, a sweeping light while the contract reads the run.
   const ribbon = el('div', 'ribbon is-pending');
@@ -209,13 +185,22 @@ export function mountResult(host: HTMLElement, summary: ResultSummary, onSeal?: 
   crest.append(emblemIcon(summary.delver.emblem, 'emblem'));
   medallion.append(portrait, crest);
   const heroCopy = el('div', 'hero-copy-block');
-  heroCopy.append(el('p', 'hero-kicker', 'A new delver is yours'), el('p', 'hero-earned-name', summary.delver.name));
+  const kicker = el('p', 'hero-kicker', DELVER_EARNED_KICKER);
+  heroCopy.append(kicker, el('p', 'hero-earned-name', summary.delver.name));
   const vault = el('button', 'btn btn-primary', 'Open the vault');
   vault.type = 'button';
   vault.dataset.action = 'vault';
   heroCopy.append(vault);
   hero.append(medallion, heroCopy);
   card.append(hero);
+
+  const nudge = el('p', 'record-nudge', 'Your delver lives in this browser, so keep your record safe. ');
+  nudge.hidden = true;
+  const nudgeLink = el('button', 'quiet-link', 'Open Your record');
+  nudgeLink.type = 'button';
+  nudgeLink.dataset.action = 'stats';
+  nudge.append(nudgeLink);
+  card.append(nudge);
 
   const share = el('div', 'share-actions');
   share.hidden = true;
@@ -231,15 +216,18 @@ export function mountResult(host: HTMLElement, summary: ResultSummary, onSeal?: 
   share.append(shareSave, shareCopy, shareChallenge);
   card.append(share);
 
-  const actions = el('div', 'result-actions');
+  const actions = el('div', 'result-actions sticky-actions');
   const retry = el('button', 'btn', 'Try again');
   retry.type = 'button';
   retry.dataset.action = 'retryVerify';
   retry.hidden = true;
+  const again = el('button', 'btn', 'Descend again');
+  again.type = 'button';
+  again.dataset.action = 'again';
   const cont = el('button', 'btn btn-primary', 'Title screen');
   cont.type = 'button';
   cont.dataset.action = 'confirm';
-  actions.append(retry, cont);
+  actions.append(retry, again, cont);
   card.append(actions);
 
   host.append(card);
@@ -250,7 +238,7 @@ export function mountResult(host: HTMLElement, summary: ResultSummary, onSeal?: 
   let last = '';
   let sealed = false;
   applyVerification = (v) => {
-    const key = `${v.state}|${v.message}|${v.rank}|${v.txUrl}|${v.heroEarned}|${v.canRetry}`;
+    const key = `${v.state}|${v.message}|${v.rank}|${v.txUrl}|${v.heroEarned}|${v.delverGrew?.clears ?? 'x'}|${v.delverGrew ? 1 : 0}|${v.canRetry}|${v.recordNudge ? 1 : 0}`;
     if (key === last) return;
     last = key;
 
@@ -258,6 +246,7 @@ export function mountResult(host: HTMLElement, summary: ResultSummary, onSeal?: 
     ribbon.classList.toggle('is-failed', v.state === 'failed');
     ribbon.classList.toggle('is-practice', v.state === 'practice');
     retry.hidden = !v.canRetry;
+    nudge.hidden = !v.recordNudge;
 
     if (v.state === 'pending' || v.state === 'waiting') {
       story.textContent = STORY[v.state];
@@ -281,7 +270,8 @@ export function mountResult(host: HTMLElement, summary: ResultSummary, onSeal?: 
       tx.hidden = false;
       tx.href = v.txUrl;
     }
-    if (v.heroEarned) {
+    if (v.heroEarned || v.delverGrew) {
+      kicker.textContent = v.delverGrew ? delverGrewKicker(v.delverGrew.clears) : DELVER_EARNED_KICKER;
       hero.hidden = false;
       hero.classList.add('is-revealed');
     }

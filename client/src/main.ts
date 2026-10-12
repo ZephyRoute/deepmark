@@ -34,7 +34,7 @@ if (previewDescent) {
     }
   });
 } else if (previewResult) {
-  // http://localhost:5173/?preview=result&hero=1&loss=1
+  // http://localhost:5173/?preview=result&hero=1 (new delver) or hero=vet (veteran clear) &loss=1
   const params = new URLSearchParams(window.location.search);
   // Mounted in the real shell, so landmarks and styles match the game.
   const host = document.getElementById('overlay') ?? document.body;
@@ -60,6 +60,7 @@ if (previewDescent) {
         rank: 2,
         txUrl: 'https://stellar.expert/explorer/testnet',
         heroEarned: params.get('hero') === '1',
+        delverGrew: params.get('hero') === 'vet' ? { clears: 3 } : null,
         canRetry: false,
       });
     }, 4500);

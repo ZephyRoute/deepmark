@@ -1,5 +1,6 @@
 import { isValidLoadout, type Loadout, type Look } from './loadout';
 import { ActionCode, applyAction, drainEvents, MAX_ACTIONS, newRun, type RunState } from './state';
+import { readItem, removeItem, writeItem } from '../storage';
 
 /**
  * A run the contract has opened but not yet settled, kept in this browser so a
@@ -75,6 +76,7 @@ export function parseSavedRun(raw: string): SavedRun | null {
   try {
     value = JSON.parse(raw);
   } catch {
+    // Not JSON at all, so not a run this browser saved.
     return null;
   }
   if (!value || typeof value !== 'object') return null;
@@ -97,28 +99,17 @@ export function serializeSavedRun(run: RunState): string {
 }
 
 export function saveRun(run: RunState): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, serializeSavedRun(run));
-  } catch {
-    // Storage is unavailable (private mode, quota): the run still plays, it just cannot resume after a reload.
-  }
+  // When storage is unavailable the run still plays, it just cannot resume after a reload.
+  writeItem(STORAGE_KEY, serializeSavedRun(run));
 }
 
 export function loadSavedRun(): SavedRun | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? parseSavedRun(raw) : null;
-  } catch {
-    return null;
-  }
+  const raw = readItem(STORAGE_KEY);
+  return raw ? parseSavedRun(raw) : null;
 }
 
 export function clearSavedRun(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Nothing was stored, or storage is unavailable. Either way there is nothing to clear.
-  }
+  removeItem(STORAGE_KEY);
 }
 
 /**

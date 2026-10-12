@@ -139,10 +139,13 @@ if (MARKDOWN) {
   console.log('| Use | Foreground | Surface | Ratio | Needs | Result |');
   console.log('|---|---|---|---|---|---|');
   for (const row of rows) {
-    console.log(`| ${row.use} | \`${row.fg}\` | \`${row.bg}\` | ${row.ratio.toFixed(2)} | ${row.min} | ${row.ratio >= row.min ? 'pass' : 'fail'} |`);
+    console.log(
+      `| ${row.use} | \`${row.fg}\` | \`${row.bg}\` | ${row.ratio.toFixed(2)} | ${row.min} | ${row.ratio >= row.min ? 'pass' : 'fail'} |`
+    );
   }
 } else {
-  for (const row of rows) console.log(`${row.ratio >= row.min ? 'ok  ' : 'FAIL'} ${row.ratio.toFixed(2).padStart(5)} (needs ${row.min})  ${row.use}`);
+  for (const row of rows)
+    console.log(`${row.ratio >= row.min ? 'ok  ' : 'FAIL'} ${row.ratio.toFixed(2).padStart(5)} (needs ${row.min})  ${row.use}`);
   console.log(failing.length === 0 ? 'CONTRAST: all pairs pass' : `CONTRAST: ${failing.length} pairs below threshold`);
 }
 process.exit(failing.length === 0 ? 0 : 1);

@@ -127,9 +127,7 @@ export function summarize(
     const day = run.at.slice(0, 10);
     byDay.set(day, (byDay.get(day) ?? 0) + 1);
   }
-  const days = eventWindow
-    ? utcDays(eventWindow.from, eventWindow.to).map((day) => ({ day, runs: byDay.get(day) ?? 0 }))
-    : [];
+  const days = eventWindow ? utcDays(eventWindow.from, eventWindow.to).map((day) => ({ day, runs: byDay.get(day) ?? 0 })) : [];
   return {
     players: sorted,
     playerCount: sorted.length,

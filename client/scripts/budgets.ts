@@ -61,15 +61,38 @@ export function checkBudgets(report: BudgetInput, profile: ProfileName): Violati
   };
 
   over('Cold load transfer', report.load.bytesKB, BUDGETS.transferKB, ' KB', 'Check for a new or unoptimized asset.');
-  over('Cumulative layout shift', report.load.clsScore, BUDGETS.layoutShift, '', 'Reserve space for late content or load styles before first paint.');
+  over(
+    'Cumulative layout shift',
+    report.load.clsScore,
+    BUDGETS.layoutShift,
+    '',
+    'Reserve space for late content or load styles before first paint.'
+  );
   if (report.load.longTasks.count > 0) {
-    over('Longest task during load', report.load.longTasks.maxMs, longTaskMs, ' ms', 'Split or defer the work that blocks the main thread.');
+    over(
+      'Longest task during load',
+      report.load.longTasks.maxMs,
+      longTaskMs,
+      ' ms',
+      'Split or defer the work that blocks the main thread.'
+    );
   }
   const sampled = report.frames.find((f) => f.throttle === throttle);
   if (!sampled) {
-    out.push({ metric: 'Frame time', actual: 0, limit: BUDGETS.frameMs, message: `No frame sample at ${throttle}x CPU throttle was recorded.` });
+    out.push({
+      metric: 'Frame time',
+      actual: 0,
+      limit: BUDGETS.frameMs,
+      message: `No frame sample at ${throttle}x CPU throttle was recorded.`,
+    });
   } else {
-    over(`Frame time ${percentile} at ${throttle}x throttle`, sampled[percentile], BUDGETS.frameMs, ' ms', 'Profile the render loop for per frame allocations.');
+    over(
+      `Frame time ${percentile} at ${throttle}x throttle`,
+      sampled[percentile],
+      BUDGETS.frameMs,
+      ' ms',
+      'Profile the render loop for per frame allocations.'
+    );
   }
   return out;
 }

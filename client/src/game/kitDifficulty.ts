@@ -33,16 +33,16 @@ export function difficultyOf(percent: number): Difficulty {
 function bestKit(): Kit {
   let best: Kit = { base: 0, weapon: 0, charm: 0 };
   let bestPercent = -1;
-  KIT_CLEAR_PERCENT.forEach((weapons, base) =>
-    weapons.forEach((charms, weapon) =>
+  KIT_CLEAR_PERCENT.forEach((weapons, base) => {
+    weapons.forEach((charms, weapon) => {
       charms.forEach((percent, charm) => {
         if (percent > bestPercent) {
           best = { base, weapon, charm };
           bestPercent = percent;
         }
-      })
-    )
-  );
+      });
+    });
+  });
   return best;
 }
 

@@ -1,899 +1,134 @@
-import { ActionCode, applyAction, drainEvents, newRun, type GameEvent, type RunState } from './game/state';
-import { loadProgress, recordRun, type Progress } from './game/progress';
-import { clearSavedRun, loadSavedRun, planResume, saveRun, type ResumePlan } from './game/savedRun';
-import { onAction, type Action } from './input/keyboard';
-import { drawWorld, face } from './render/canvas';
-import { playAttack, resetMotion } from './render/motion';
-import {
-  syncChrome,
-  type BoardTab,
-  type ChainRead,
-  type LeaderboardRow,
-  type OnchainSnapshot,
-} from './render/chrome';
-import { drainArrivedRelics, flashActor, resetRelicTravel, spawnBurst, spawnPopup, spawnRelicTravel, triggerShake } from './render/effects';
-import { showBanner } from './render/banner';
-import { playBossIntro, preloadBossArt, type BossIntroHandle } from './render/bossIntro';
-import { hitStop, punch } from './render/clock';
-import type { VerifyState } from './render/result';
-import {
-  sfxDead,
-  sfxDescend,
-  sfxEnemyDied,
-  sfxExtracted,
-  sfxFloorCleared,
-  sfxHitEnemy,
-  sfxHitPlayer,
-  sfxBanner,
-  sfxBossIntro,
-  sfxHeartbeat,
-  sfxHeroEarned,
-  sfxSeal,
-  sfxRelic,
-  sfxRelicArrive,
-  sfxStep,
-  sfxUi,
-  isMuted,
-  startAmbience,
-  stopAmbience,
-  toggleMuted,
-} from './render/audio';
-import { loadDraft, loadoutOf, takeChallengeFromUrl, type Draft } from './game/draft';
-import { noteHintInput, resetHints, showHint } from './render/hints';
-import { challengeUrl, preloadShareAssets, renderShareCard } from './render/shareCard';
-import { GRID_WIDTH, MAX_FLOOR, TILE_SIZE } from './game/floor';
-import { HEROES, HERO_ORDER } from './game/heroes';
-import { CHARMS, WEAPONS } from './game/items';
-import { cloakFilter } from './render/emblems';
-import type { DescentOptions, DescentStage } from './render/descent';
-import { rankForClears, type Loadout, type Look } from './game/loadout';
-import { chain, warmChain } from './stellar/lazy';
-import { CONTRACT_ERROR, freshChoice, isContractError, veteranChoice } from './stellar/choice';
-import type { FinishedRun, Hero, HeroChoice, PlayerRecord, RunTicket, TopEntry } from './stellar/contract';
-import { fetchRelicBalances, type RelicBalances } from './stellar/relics';
+import { drainArrivedRelics } from './render/effects';
+import { syncChrome } from './render/chrome';
+import { drawWorld } from './render/canvas';
+import { sfxHeartbeat, sfxRelicArrive, sfxSeal } from './render/audio';
+import { warmChain } from './stellar/lazy';
+import { BACKDROP_COLOR, CORE_BUMP_DELAY_MS, HEARTBEAT_MS, LOW_HEALTH_RATIO } from './constants';
+import { installInput } from './app/actions';
+import { ctx } from './app/canvas';
+import { isDescendHovering, onDescendHover } from './app/descendHeartbeat';
+import { onchainSnapshot, refreshOnchain } from './app/onchain';
+import { beginRun, planFresh, planVeteran, resumeOpenRun } from './app/run';
+import { session } from './app/session';
 
-const canvas = document.getElementById('game') as HTMLCanvasElement;
-const context = canvas.getContext('2d');
-if (!context) throw new Error('Canvas 2D context unavailable');
-const ctx: CanvasRenderingContext2D = context;
-
-let run: RunState | null = null;
-let progress: Progress = loadProgress();
-let chainStatus = '';
-let chainTx = '';
-let chainRank: number | null = null;
-let onchainRecord: PlayerRecord | null = null;
-let relicBalances: RelicBalances | null = null;
-let playerAddress = '';
-
-let draft: Draft = loadDraft();
-let challengeSeed: number | null = null;
-let pendingChallengeDraft = false;
-{
-  const challenge = takeChallengeFromUrl();
-  if (challenge) {
-    draft = { ...draft, base: challenge.base, weapon: challenge.weapon, charm: challenge.charm };
-    challengeSeed = challenge.seed;
-    pendingChallengeDraft = true;
-  }
-}
-let showCreator = false;
-let showVault = false;
-let vaultHeroes: Hero[] | null = null;
-let vaultLoading = false;
-let boardTab: BoardTab = 'fresh';
-let chainHeroId: number | null = null;
-let canRetry = false;
-let verifyState: VerifyState = 'pending';
-let runId = 0;
-/** What the HUD counter actually shows: bumps when a relic's travelling point lands, not when it is picked up. */
-let displayedRelics = 0;
-/** Set only when a run verifies this session, so the leaderboard's own-row glow never shows on a cold load. */
-let justVerifiedUntil = 0;
-
-const FLOOR_NAMES: Record<number, string> = { 1: 'The Reliquary', 2: 'The Drowned Chapel', 3: 'The Obsidian Crypt' };
-const HEARTBEAT_MS = 1100;
-const LOW_HEALTH = 0.34;
-let lastHeartbeat = 0;
-let failedRun: RunState | null = null;
-let runWasVeteran = false;
-let showLeaderboard = false;
-let showStats = false;
-let starting = false;
-let startStage: DescentStage = 'account';
-let descent: DescentOptions | null = null;
-let practice = false;
-let leaderboardLoading = false;
-let leaderboardRows: LeaderboardRow[] | null = null;
-let chainRead: ChainRead = 'loading';
-let bossIntro: BossIntroHandle | null = null;
-
-/** Waiting longer than this for the chain to open a run falls back to a practice run. */
-const START_TIMEOUT_MS = 50_000;
-const START_RETRIES = 3;
-/** The stairs-open beat before the first floor appears, so the scene resolves instead of cutting. */
-const READY_HOLD_MS = 1400;
-/** The scene always plays at least this long, so a fast network never shows a flash of it. */
-const MIN_SCENE_MS = 3200;
-const START_RETRY_MS = 6_000;
-const LEADERBOARD_ROWS = 10;
-
-// One chain transaction at a time. Two transactions from the same account
-// built before the first lands would reuse a sequence number and one of them
-// would fail, so starting a run waits for the previous run's verification.
-let chainQueue: Promise<unknown> = Promise.resolve();
-function enqueue<T>(job: () => Promise<T>): Promise<T> {
-  const next = chainQueue.then(job, job);
-  chainQueue = next.catch(() => undefined);
-  return next;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Timed out waiting for Stellar')), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        clearTimeout(timer);
-        reject(error);
-      }
-    );
-  });
-}
-
-async function refreshOnchain(): Promise<void> {
-  try {
-    const api = await chain();
-    const keypair = await api.getPlayerKeypair();
-    playerAddress = keypair.publicKey();
-    const [record, balances] = await Promise.all([api.fetchRecord(playerAddress), fetchRelicBalances(playerAddress)]);
-    onchainRecord = record;
-    relicBalances = balances;
-    chainRead = 'ready';
-  } catch (err) {
-    chainRead = 'unavailable';
-    console.warn('Deepmark: could not read the on-chain record yet', err);
-  }
-}
+/** Composition root: wires input, the chain warm-up and the frame loop. The rules live in `app/`. */
 
 // Load the Stellar chunk when idle, then read the player's record. The title never waits for either.
 warmChain(() => void refreshOnchain().then(resumeOpenRun));
+installInput();
 
-function onchainSnapshot(): OnchainSnapshot | null {
-  if (!onchainRecord) return null;
-  return {
-    bestFloor: onchainRecord.best_floor,
-    bestScore: onchainRecord.best_score,
-    runs: onchainRecord.total_runs,
-    extractions: onchainRecord.extractions,
-    deaths: onchainRecord.deaths,
-    forfeits: onchainRecord.forfeits,
-    relicsBanked: onchainRecord.relics_banked,
-  };
+function isLowHealth(): boolean {
+  const run = session.run;
+  if (!run || run.mode === 'result' || session.showLeaderboard || session.showStats) return false;
+  return run.player.hp / run.player.maxHp <= LOW_HEALTH_RATIO;
 }
 
-function toRows(entries: TopEntry[]): LeaderboardRow[] {
-  return entries.slice(0, LEADERBOARD_ROWS).map((entry) => ({
-    address: entry.player,
-    name: entry.name,
-    emblem: entry.emblem,
-    score: entry.score,
-    floor: entry.floor,
-    hpLeft: entry.hp_left,
-    actions: entry.actions,
-  }));
+function pulseHeartbeatWhenLow(): void {
+  if (!isLowHealth()) return;
+  const now = performance.now();
+  if (now - session.lastHeartbeat <= HEARTBEAT_MS) return;
+  session.lastHeartbeat = now;
+  sfxHeartbeat();
 }
 
-async function loadBoard(): Promise<void> {
-  const tab = boardTab;
-  leaderboardLoading = true;
-  leaderboardRows = null;
-  try {
-    const api = await chain();
-    const entries = tab === 'veteran' ? await api.fetchTopVeteran() : await api.fetchTopFresh();
-    if (tab === boardTab) leaderboardRows = toRows(entries);
-  } catch (err) {
-    console.warn('Deepmark: could not load the leaderboard', err);
-    if (tab === boardTab) leaderboardRows = [];
-  } finally {
-    if (tab === boardTab) leaderboardLoading = false;
-  }
-}
-
-async function openLeaderboard(): Promise<void> {
-  showLeaderboard = true;
-  if (leaderboardRows || leaderboardLoading) return;
-  await loadBoard();
-}
-
-async function openVault(): Promise<void> {
-  showVault = true;
-  if (vaultHeroes || vaultLoading) return;
-  vaultLoading = true;
-  try {
-    const api = await chain();
-    const keypair = await api.getPlayerKeypair();
-    vaultHeroes = await api.fetchHeroes(keypair.publicKey());
-  } catch (err) {
-    console.warn('Deepmark: could not read the vault', err);
-    vaultHeroes = null;
-  } finally {
-    vaultLoading = false;
-  }
-}
-
-interface DelverPlan {
-  choice: HeroChoice;
-  loadout: Loadout;
-  look: Look;
-  veteran: boolean;
-}
-
-function planFresh(chosen: Draft): DelverPlan {
-  return {
-    choice: freshChoice({ look: chosen.look, base: chosen.base, weapon: chosen.weapon, charm: chosen.charm }),
-    loadout: loadoutOf(chosen),
-    look: chosen.look,
-    veteran: false,
-  };
-}
-
-function planVeteran(hero: Hero): DelverPlan {
-  return {
-    choice: veteranChoice(hero.id),
-    loadout: { base: hero.base, weapon: hero.weapon, charm: hero.charm, rank: rankForClears(hero.clears) },
-    look: hero.look,
-    veteran: true,
-  };
-}
-
-/** Opens a run on chain so the contract issues the seed. Falls back to a practice run. */
-async function beginRun(plan: DelverPlan): Promise<void> {
-  if (starting) return;
-  starting = true;
-  displayedRelics = 0;
-  resetRelicTravel();
-  canvas.classList.remove('board-sunk');
-  startStage = 'account';
-  const openedAt = performance.now();
-  const heroId = HERO_ORDER[plan.loadout.base] ?? 'lantern';
-  descent = {
-    art: plan.loadout.rank > 0 ? HEROES[heroId].veteranArt : HEROES[heroId].art,
-    filter: cloakFilter(plan.look.cloak, plan.loadout.base),
-    name: plan.look.name,
-    emblem: plan.look.emblem,
-    kit: [
-      HEROES[heroId].name,
-      WEAPONS[plan.loadout.weapon]?.name ?? '',
-      CHARMS[plan.loadout.charm]?.name ?? '',
-      ...(plan.loadout.rank > 0 ? [`Veteran rank ${plan.loadout.rank}`] : []),
-    ].join('  ·  '),
-  };
-  chainStatus = '';
-  chainTx = '';
-  chainRank = null;
-  chainHeroId = null;
-  runWasVeteran = plan.veteran;
-  try {
-    const ticket = await withTimeout(
-      enqueue(async () => {
-        const api = await chain();
-        const keypair = await api.getPlayerKeypair();
-        startStage = 'opening';
-        for (let attempt = 0; ; attempt += 1) {
-          try {
-            return await api.startRun(keypair, plan.choice);
-          } catch (err) {
-            const cooling = isContractError(err, CONTRACT_ERROR.StartCooldown);
-            if (!cooling || attempt >= START_RETRIES) throw err;
-            await sleep(START_RETRY_MS);
-          }
-        }
-      }),
-      START_TIMEOUT_MS
-    );
-    await sleep(Math.max(0, MIN_SCENE_MS - (performance.now() - openedAt)));
-    startStage = 'ready';
-    sfxDescend();
-    await sleep(READY_HOLD_MS);
-    resetMotion();
-    startAmbience(1);
-    showBanner('Floor 1', FLOOR_NAMES[1] ?? '');
-    // The ticket is authoritative: the contract fixed the delver and the seed.
-    const loadout: Loadout = { base: ticket.base, weapon: ticket.weapon, charm: ticket.charm, rank: ticket.rank };
-    run = newRun(loadout, ticket.seed, ticket.look);
-    practice = false;
-    saveRun(run);
-  } catch (err) {
-    console.warn('Deepmark: could not open a verified run, starting a practice run', err);
-    await sleep(Math.max(0, MIN_SCENE_MS - (performance.now() - openedAt)));
-    startStage = 'offline';
-    await sleep(READY_HOLD_MS + 600);
-    resetMotion();
-    startAmbience(1);
-    showBanner('Floor 1', FLOOR_NAMES[1] ?? '');
-    run = newRun(plan.loadout, challengeSeed ?? undefined, plan.look);
-    challengeSeed = null;
-    practice = true;
-  } finally {
-    starting = false;
-    descent = null;
-  }
-  showHint('move');
-}
-
-/** Sends the action log. The contract replays it and decides the result. */
-const VERIFY_ATTEMPTS = 6;
-const VERIFY_RETRY_MS = 6_000;
-
-/** The contract's own refusals do not heal by waiting. Only TooFast and network trouble do. */
-function isPermanentFailure(err: unknown): boolean {
-  if (!(err instanceof Error) || !err.message.includes('Error(Contract, #')) return false;
-  return !isContractError(err, CONTRACT_ERROR.TooFast);
-}
-
-function describeFailure(err: unknown): string {
-  if (isContractError(err, CONTRACT_ERROR.RunNotStarted)) {
-    return 'This run is no longer open on Stellar. It was already settled or it expired.';
-  }
-  if (isContractError(err, CONTRACT_ERROR.NotHeroOwner)) return 'This delver changed hands during the run, so it cannot be settled.';
-  if (
-    isContractError(err, CONTRACT_ERROR.RunIncomplete) ||
-    isContractError(err, CONTRACT_ERROR.TrailingActions) ||
-    isContractError(err, CONTRACT_ERROR.InvalidAction)
-  ) {
-    return 'The contract could not reproduce this run, so it was not recorded.';
-  }
-  return 'Stellar could not be reached to settle this run.';
-}
-
-/** Sends the log, waiting out the contract's minimum play time and brief network trouble. */
-async function submitLog(finished: RunState): Promise<FinishedRun> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await enqueue(async () => {
-        const api = await chain();
-        return api.finishRun(await api.getPlayerKeypair(), finished.actions);
-      });
-    } catch (err) {
-      if (isPermanentFailure(err) || attempt >= VERIFY_ATTEMPTS - 1) throw err;
-      chainStatus = 'Waiting for Stellar to settle this run...';
-      verifyState = 'waiting';
-      await sleep(VERIFY_RETRY_MS);
-    }
-  }
-}
-
-async function verifyOnChain(finished: RunState): Promise<void> {
-  chainStatus = 'Verifying on Stellar...';
-  verifyState = 'pending';
-  canRetry = false;
-  let settled: FinishedRun;
-  try {
-    settled = await submitLog(finished);
-  } catch (err) {
-    console.warn('Deepmark: failed to verify this run on-chain', err);
-    chainStatus = describeFailure(err);
-    verifyState = 'failed';
-    canRetry = !isPermanentFailure(err);
-    failedRun = finished;
-    // A refusal that waiting cannot fix means the run is gone for good, so there is nothing left to resume.
-    if (isPermanentFailure(err)) clearSavedRun();
-    return;
-  }
-
-  const { hash, outcome } = settled;
-  failedRun = null;
-  clearSavedRun();
-  chainTx = hash;
-  chainHeroId = outcome.hero_id ?? null;
-  if (chainHeroId !== null) vaultHeroes = null;
-  const relicsMatch = outcome.relics_common + outcome.relics_rare + outcome.relics_core === finished.relicsThisRun;
-  const agrees =
-    outcome.floor_reached === finished.floorNumber &&
-    outcome.score === finished.scoreThisRun &&
-    outcome.hp_left === finished.player.hp &&
-    relicsMatch;
-  if (!agrees) console.error('Deepmark: the contract result differs from the local simulation', outcome);
-  chainStatus = agrees ? 'Verified on Stellar' : 'Verified on Stellar (this browser disagreed, the chain result stands)';
-  verifyState = 'verified';
-  justVerifiedUntil = performance.now() + 4000;
-  if (chainHeroId !== null) window.setTimeout(sfxHeroEarned, 900);
-
-  // The run is settled. Anything below only decorates the result screen, so a
-  // failure here must never turn a confirmed transaction into an error.
-  try {
-    await refreshOnchain();
-    const api = await chain();
-    const top = runWasVeteran ? await api.fetchTopVeteran() : await api.fetchTopFresh();
-    const position = top.findIndex((entry) => entry.player === playerAddress);
-    chainRank = position >= 0 ? position + 1 : null;
-    leaderboardRows = null;
-  } catch (err) {
-    console.warn('Deepmark: could not refresh the leaderboard rank', err);
-  }
-}
-
-/** A run that grows past what the contract accepts can no longer be verified. */
-function endExhaustedRun(state: RunState): void {
-  if (state.mode === 'result') return;
-  state.mode = 'result';
-  state.resultKind = 'dead';
-  state.relicsThisRun = 0;
-  state.scoreThisRun = 0;
-  practice = true;
-  clearSavedRun();
-  chainStatus = 'This run grew too long to be verified.';
-}
-
-const DIRS: Partial<Record<Action, [number, number]>> = {
-  up: [0, -1],
-  down: [0, 1],
-  left: [-1, 0],
-  right: [1, 0],
-};
-
-/** Books a finished run into this browser's own progress. The simulation stays free of storage so a log can be replayed safely. */
-function settleLocalProgress(finished: RunState): void {
-  const extracted = finished.resultKind === 'extracted';
-  const result = recordRun({
-    floorReached: finished.floorNumber,
-    relicsKept: finished.relicsThisRun,
-    score: finished.scoreThisRun,
-    extracted,
-    heroId: finished.heroId,
-  });
-  progress = result.progress;
-  finished.newBest = result.isNewBest && extracted;
-}
-
-/** Puts a run rebuilt from its saved log back on screen, at the point it was left. */
-function presentResumedRun(plan: Exclude<ResumePlan, { kind: 'discard' }>, ticket: RunTicket): void {
-  const resumed = plan.run;
-  resetMotion();
-  resetRelicTravel();
-  canvas.classList.remove('board-sunk');
-  chainStatus = '';
-  chainTx = '';
-  chainRank = null;
-  chainHeroId = null;
-  canRetry = false;
-  practice = false;
-  runWasVeteran = typeof ticket.veteran === 'number';
-  displayedRelics = resumed.relicsThisRun;
-  run = resumed;
-  if (plan.kind === 'continue') {
-    startAmbience(resumed.floorNumber);
-    showBanner('Run restored', FLOOR_NAMES[resumed.floorNumber] ?? '');
-    return;
-  }
-  // The run had already ended when the page went away: show its result and send the log.
-  runId += 1;
-  if (resumed.resultKind === 'dead') canvas.classList.add('board-sunk');
-  else preloadShareAssets(HEROES[resumed.heroId].veteranArt, resumed.loadout);
-  void verifyOnChain(resumed);
-}
-
-let resumeChecked = false;
-
-/**
- * If this browser holds a saved run, asks the contract whether that very run is
- * still open and, if so, restores it. A saved run the contract no longer knows
- * is dropped. If Stellar cannot be read the save is kept for the next visit.
- */
-async function resumeOpenRun(): Promise<void> {
-  if (resumeChecked || chainRead !== 'ready') return;
-  resumeChecked = true;
-  const saved = loadSavedRun();
-  if (!saved) return;
-  try {
-    const api = await chain();
-    const ticket = await api.fetchOpenRun(playerAddress);
-    if (run || starting) return;
-    const plan = planResume(saved, ticket);
-    if (plan.kind === 'discard' || !ticket) {
-      clearSavedRun();
-      return;
-    }
-    presentResumedRun(plan, ticket);
-  } catch (err) {
-    console.warn('Deepmark: could not check for an open run', err);
-  }
-}
-
-function handleEvent(event: GameEvent): void {
-  switch (event.type) {
-    case 'enemyHit': {
-      if (run) {
-        playAttack('player', run.player.x, run.player.y);
-        const struck = run.enemies.findIndex((e) => e.x === event.x && e.y === event.y);
-        if (struck >= 0) flashActor(`enemy-${struck}`);
-      }
-      spawnPopup(event.x, event.y, `-${event.amount}`, '#e5e7eb');
-      spawnBurst(event.x, event.y, 'hit');
-      sfxHitEnemy();
-      hitStop(event.amount >= 5 ? 90 : 55);
-      punch(Math.min(1, 0.25 + event.amount * 0.1));
-      triggerShake(100 + event.amount * 12, 3 + event.amount);
-      break;
-    }
-    case 'playerHit':
-      if (run && run.activeEnemyIndex !== null) {
-        const enemy = run.enemies[run.activeEnemyIndex];
-        if (enemy) playAttack(`enemy-${run.activeEnemyIndex}`, enemy.x, enemy.y);
-      }
-      spawnPopup(event.x, event.y, `-${event.amount}`, '#ef5350');
-      flashActor('player');
-      spawnBurst(event.x, event.y, 'hit');
-      sfxHitPlayer();
-      hitStop(80);
-      punch(0.5 + Math.min(0.5, event.amount * 0.1));
-      triggerShake(150 + event.amount * 15, 5 + event.amount * 1.5);
-      break;
-    case 'enemyDied':
-      spawnBurst(event.x, event.y, 'kill');
-      hitStop(120);
-      punch(0.8);
-      sfxEnemyDied();
-      triggerShake(120, 5);
-      break;
-    case 'relic': {
-      spawnPopup(event.x, event.y, '+relic', '#ffca28');
-      spawnBurst(event.x, event.y, 'relic');
-      sfxRelic(event.kind);
-      const offsetX = (canvas.width - GRID_WIDTH * TILE_SIZE) / 2;
-      const startX = offsetX + event.x * TILE_SIZE + TILE_SIZE / 2;
-      const startY = event.y * TILE_SIZE + TILE_SIZE / 2;
-      const counter = document.getElementById('hud-relics');
-      const canvasRect = canvas.getBoundingClientRect();
-      if (counter && canvasRect.width > 0 && canvasRect.height > 0) {
-        // The counter sits below the board in this layout: the point aims at the counter's
-        // live horizontal position but can only ever reach the board's own bottom edge.
-        const counterRect = counter.getBoundingClientRect();
-        const scaleX = canvas.width / canvasRect.width;
-        const scaleY = canvas.height / canvasRect.height;
-        const endX = Math.min(canvas.width, Math.max(0, (counterRect.left + counterRect.width / 2 - canvasRect.left) * scaleX));
-        const endY = Math.min(canvas.height - 4, (counterRect.top - canvasRect.top) * scaleY);
-        spawnRelicTravel(startX, startY, endX, endY, event.kind);
-      }
-      break;
-    }
-    case 'floorCleared':
-      sfxFloorCleared();
-      showHint('choice');
-      if (run && run.floorNumber === MAX_FLOOR - 1) preloadBossArt();
-      break;
-    case 'descended':
-      resetMotion();
-      sfxDescend();
-      startAmbience(event.floor);
-      if (event.floor >= MAX_FLOOR) {
-        const stage = document.querySelector<HTMLElement>('.stage');
-        if (stage) {
-          bossIntro = playBossIntro(
-            stage,
-            'Warden Prime',
-            () => sfxBossIntro(),
-            () => {
-              bossIntro = null;
-            }
-          );
-        } else {
-          sfxBossIntro();
-        }
-      } else {
-        showBanner(`Floor ${event.floor}`, FLOOR_NAMES[event.floor] ?? '', 'floor');
-        sfxBanner();
-      }
-      break;
-    case 'extracted':
-      stopAmbience();
-      sfxExtracted();
-      if (run) settleLocalProgress(run);
-      runId += 1;
-      if (run) {
-        const heroId = HERO_ORDER[run.loadout.base] ?? 'lantern';
-        preloadShareAssets(HEROES[heroId].veteranArt, run.loadout);
-      }
-      if (run && !practice) void verifyOnChain(run);
-      break;
-    case 'dead':
-      stopAmbience();
-      sfxDead();
-      triggerShake(250, 10);
-      canvas.classList.add('board-sunk');
-      if (run) settleLocalProgress(run);
-      runId += 1;
-      if (run && !practice) void verifyOnChain(run);
-      break;
-    case 'combatStart':
-      showHint('combat');
-      break;
-  }
-}
-
-function flashShareButton(action: 'shareSave' | 'shareCopy' | 'shareChallenge', label: string): void {
-  const btn = document.querySelector<HTMLButtonElement>(`[data-action="${action}"]`);
-  if (!btn) return;
-  const original = btn.textContent ?? '';
-  btn.textContent = label;
-  window.setTimeout(() => {
-    btn.textContent = original;
-  }, 1600);
-}
-
-async function shareResult(target: RunState, mode: 'save' | 'copy'): Promise<void> {
-  const heroId = HERO_ORDER[target.loadout.base] ?? 'lantern';
-  const blob = await renderShareCard({
-    name: target.look.name,
-    portraitArt: HEROES[heroId].veteranArt,
-    portraitFilter: cloakFilter(target.look.cloak, target.loadout.base),
-    weapon: target.loadout.weapon,
-    charm: target.loadout.charm,
-    floorReached: target.floorNumber,
-    maxFloor: MAX_FLOOR,
-    score: target.scoreThisRun,
-    relics: target.relicsThisRun,
-    rank: chainRank,
-    txHash: chainTx,
-  });
-  if (!blob) return;
-  if (mode === 'copy' && typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
-    try {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      flashShareButton('shareCopy', 'Copied');
-      return;
-    } catch {
-      // Clipboard image writes are not supported everywhere (notably iOS Safari): fall back to a download.
-    }
-  }
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `deepmark-${target.look.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`;
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 2000);
-  flashShareButton(mode === 'copy' ? 'shareCopy' : 'shareSave', 'Saved');
-}
-
-async function copyChallengeLink(target: RunState): Promise<void> {
-  const url = challengeUrl(target.seed, target.loadout);
-  try {
-    await navigator.clipboard.writeText(url);
-    flashShareButton('shareChallenge', 'Copied');
-  } catch {
-    // No clipboard permission: the button simply does not confirm.
-  }
-}
-
-/** Hovering Descend on the bank-or-push prompt: the heartbeat quickens the longer it holds. */
-let descendHovering = false;
-let descendHoverTimer: ReturnType<typeof setTimeout> | null = null;
-
-function scheduleDescendBeat(delay: number): void {
-  descendHoverTimer = setTimeout(() => {
-    if (!descendHovering) return;
-    sfxHeartbeat();
-    scheduleDescendBeat(Math.max(220, delay * 0.82));
-  }, delay);
-}
-
-function onDescendHover(hovering: boolean): void {
-  if (hovering === descendHovering) return;
-  descendHovering = hovering;
-  if (hovering) {
-    sfxHeartbeat();
-    scheduleDescendBeat(650);
-  } else if (descendHoverTimer) {
-    clearTimeout(descendHoverTimer);
-    descendHoverTimer = null;
-  }
-}
-
-const MOVE_CODES = {
-  up: ActionCode.Up,
-  down: ActionCode.Down,
-  left: ActionCode.Left,
-  right: ActionCode.Right,
-} as const;
-
-function syncMuteButton(): void {
-  const button = document.getElementById('mute');
-  if (!button) return;
-  const muted = isMuted();
-  button.textContent = muted ? 'Sound off' : 'Sound on';
-  button.setAttribute('aria-pressed', muted ? 'true' : 'false');
-}
-
-syncMuteButton();
-
-onAction((action) => {
-  if (action === 'mute') {
-    toggleMuted();
-    syncMuteButton();
-    return;
-  }
-  if (!run) sfxUi();
-  if (showStats) {
-    if (action === 'stats' || action === 'cancel') showStats = false;
-    if (action === 'replayHints') resetHints();
-    return;
-  }
-
-  if (showLeaderboard) {
-    if (action === 'leaderboard' || action === 'cancel') showLeaderboard = false;
-    if (action === 'tabFresh' || action === 'tabVeteran') {
-      boardTab = action === 'tabVeteran' ? 'veteran' : 'fresh';
-      void loadBoard();
-    }
-    return;
-  }
-
-  if (starting) return;
-
-  if (bossIntro) {
-    bossIntro.skip();
-    return;
-  }
-
-  if (showCreator) {
-    if (action === 'cancel') showCreator = false;
-    return;
-  }
-
-  if (showVault) {
-    if (action === 'vault' || action === 'cancel') showVault = false;
-    return;
-  }
-
-  if (!run) {
-    if (action === 'confirm') {
-      if (pendingChallengeDraft) {
-        pendingChallengeDraft = false;
-      } else {
-        draft = loadDraft();
-      }
-      showCreator = true;
-    }
-    if (action === 'vault') void openVault();
-    if (action === 'stats') showStats = true;
-    if (action === 'leaderboard') void openLeaderboard();
-    return;
-  }
-
-  if (run.mode === 'result') {
-    const resultRun = run;
-    if (action === 'confirm') {
-      resetMotion();
-      run = null;
-      chainStatus = '';
-      chainTx = '';
-      chainRank = null;
-      canRetry = false;
-    }
-    if (action === 'retryVerify' && failedRun) void verifyOnChain(failedRun);
-    if (action === 'shareSave' || action === 'shareCopy') void shareResult(resultRun, action === 'shareCopy' ? 'copy' : 'save');
-    if (action === 'shareChallenge') void copyChallengeLink(resultRun);
-    if (action === 'vault') {
-      resetMotion();
-      run = null;
-      chainStatus = '';
-      chainTx = '';
-      chainRank = null;
-      canRetry = false;
-      void openVault();
-    }
-    return;
-  }
-
-  const actionsBefore = run.actions.length;
-  if (run.mode === 'combat') {
-    if (action === 'confirm') applyAction(run, ActionCode.Attack);
-    if (action === 'cancel') applyAction(run, ActionCode.Retreat);
-    noteHintInput(action);
-  } else if (run.mode === 'choice') {
-    if (action === 'confirm') applyAction(run, ActionCode.Descend);
-    if (action === 'cancel') applyAction(run, ActionCode.Extract);
-    noteHintInput(action);
-  } else {
-    const dir = DIRS[action];
-    if (dir) {
-      if (dir[0] !== 0) face(dir[0] < 0 ? -1 : 1);
-      const moved = applyAction(run, MOVE_CODES[action as keyof typeof MOVE_CODES]);
-      if (moved && run.mode === 'explore') sfxStep();
-      noteHintInput(action);
-    }
-  }
-
-  if (run.exhausted) endExhaustedRun(run);
-  if (!practice && run.actions.length !== actionsBefore) saveRun(run);
-  for (const event of drainEvents(run)) handleEvent(event);
-});
-
-function frame(): void {
-  if (run && run.mode !== 'result' && !showLeaderboard && !showStats && run.player.hp / run.player.maxHp <= LOW_HEALTH) {
-    const now = performance.now();
-    if (now - lastHeartbeat > HEARTBEAT_MS) {
-      lastHeartbeat = now;
-      sfxHeartbeat();
-    }
-  }
-  const sunkDefeat = run && run.mode === 'result' && run.resultKind !== 'extracted' && !showLeaderboard && !showStats;
-  if (run && !showLeaderboard && !showStats && run.mode !== 'result') drawWorld(ctx, run);
+function paintBoard(): void {
+  const { run, showLeaderboard, showStats } = session;
+  const covered = showLeaderboard || showStats;
+  const sunkDefeat = run && run.mode === 'result' && run.resultKind !== 'extracted' && !covered;
+  if (run && !covered && run.mode !== 'result') drawWorld(ctx, run);
   else if (!sunkDefeat) {
-    ctx.fillStyle = '#07080e';
+    ctx.fillStyle = BACKDROP_COLOR;
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
+}
+
+/** Lets each relic's travelling point land on the counter, then bumps the counter for a core relic. */
+function landArrivedRelics(): void {
   for (const kind of drainArrivedRelics()) {
-    displayedRelics += 1;
+    session.displayedRelics += 1;
     sfxRelicArrive(kind);
-    if (kind === 'core') {
-      window.setTimeout(() => {
-        const node = document.getElementById('hud-relics');
-        if (!node) return;
-        node.classList.remove('bump');
-        void node.offsetWidth;
-        node.classList.add('bump');
-      }, 140);
-    }
+    if (kind !== 'core') continue;
+    window.setTimeout(() => {
+      const node = document.getElementById('hud-relics');
+      if (!node) return;
+      node.classList.remove('bump');
+      void node.offsetWidth;
+      node.classList.add('bump');
+    }, CORE_BUMP_DELAY_MS);
   }
+}
+
+function syncView(): void {
+  const s = session;
   syncChrome({
-    showCreator,
-    showVault,
-    draft,
+    showCreator: s.showCreator,
+    showVault: s.showVault,
+    draft: s.draft,
     creatorHooks: {
       onBegin: (chosen) => {
-        draft = chosen;
-        showCreator = false;
+        s.draft = chosen;
+        s.showCreator = false;
         void beginRun(planFresh(chosen));
       },
       onBack: () => {
-        showCreator = false;
+        s.showCreator = false;
       },
     },
-    vaultHeroes,
-    vaultLoading,
+    vaultHeroes: s.vaultHeroes,
+    vaultLoading: s.vaultLoading,
     onVeteran: (id) => {
-      const hero = vaultHeroes?.find((h) => h.id === id);
+      const hero = s.vaultHeroes?.find((h) => h.id === id);
       if (!hero) return;
-      showVault = false;
+      s.showVault = false;
       void beginRun(planVeteran(hero));
     },
-    boardTab,
-    chainHeroId,
-    canRetry,
-    verifyState,
-    runId,
-    showLeaderboard,
-    showStats,
-    leaderboardLoading,
-    leaderboardRows,
-    displayRelics: displayedRelics,
-    justVerified: performance.now() < justVerifiedUntil,
-    playerAddress,
-    run,
-    progress,
+    boardTab: s.boardTab,
+    chainHeroId: s.chainHeroId,
+    chainClears: s.chainClears,
+    runWasVeteran: s.runWasVeteran,
+    canRetry: s.canRetry,
+    verifyState: s.verifyState,
+    runId: s.runId,
+    showLeaderboard: s.showLeaderboard,
+    showStats: s.showStats,
+    leaderboardLoading: s.leaderboardLoading,
+    leaderboardRows: s.leaderboardRows,
+    leaderboardFailed: s.leaderboardFailed,
+    recoveryNote: s.recoveryNote,
+    restoreStep: s.restoreStep,
+    restoreError: s.restoreError,
+    restoreTarget: s.restoreTarget,
+    displayRelics: s.displayedRelics,
+    justVerified: performance.now() < s.justVerifiedUntil,
+    playerAddress: s.playerAddress,
+    run: s.run,
+    progress: s.progress,
     onchain: onchainSnapshot(),
-    relics: relicBalances,
-    chainRead,
-    chainStatus,
-    chainTx,
-    chainRank,
-    starting,
-    startStage,
-    descent,
-    practice,
+    relics: s.relicBalances,
+    chainRead: s.chainRead,
+    chainStatus: s.chainStatus,
+    chainTx: s.chainTx,
+    chainRank: s.chainRank,
+    starting: s.starting,
+    startStage: s.startStage,
+    descent: s.descent,
+    practice: s.practice,
     onDescendHover,
     onSeal: sfxSeal,
   });
-  if (run?.mode !== 'choice' && descendHovering) onDescendHover(false);
+}
+
+function frame(): void {
+  const { run } = session;
+  if (run?.mode === 'result' && session.resultShownRunId !== session.runId) {
+    session.resultShownRunId = session.runId;
+    session.resultShownAt = performance.now();
+  }
+  pulseHeartbeatWhenLow();
+  paintBoard();
+  landArrivedRelics();
+  syncView();
+  if (session.run?.mode !== 'choice' && isDescendHovering()) onDescendHover(false);
   requestAnimationFrame(frame);
 }
 

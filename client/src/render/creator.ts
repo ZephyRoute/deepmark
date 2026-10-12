@@ -3,6 +3,7 @@ import { CHARMS, WEAPONS, type Item } from '../game/items';
 import { isValidName, NAME_MAX, NAME_MIN, statsFor, EMBLEM_COUNT } from '../game/loadout';
 import { loadoutOf, randomName, saveDraft, type Draft } from '../game/draft';
 import { clearPercent, difficultyOf, DIFFICULTY_LABEL, isRecommended, RECOMMENDED_KIT, type Difficulty } from '../game/kitDifficulty';
+import { isTouchFirst } from './dom';
 import { cloakCount, cloakFilter, cloakName, cloakSwatch, EMBLEM_NAMES, emblemIcon } from './emblems';
 
 export interface CreatorHooks {
@@ -44,11 +45,7 @@ export function mountCreator(host: HTMLElement, initial: Draft, hooks: CreatorHo
   root.noValidate = true;
   root.append(el('h2', 'panel-title', 'Forge your delver'));
   root.append(
-    el(
-      'p',
-      'panel-sub',
-      'Clear all three floors and this delver is yours to keep, as a token on Stellar. Fall, and it is gone.'
-    )
+    el('p', 'panel-sub', 'Clear all three floors and this delver is yours to keep, as a token on Stellar. Fall, and it is gone.')
   );
 
   // Preview
@@ -166,7 +163,11 @@ export function mountCreator(host: HTMLElement, initial: Draft, hooks: CreatorHo
   baseGroup.append(baseList);
   root.append(baseGroup);
 
-  function itemGroup(label: string, items: readonly Item[], pick: (id: number) => void): { group: HTMLElement; buttons: HTMLButtonElement[] } {
+  function itemGroup(
+    label: string,
+    items: readonly Item[],
+    pick: (id: number) => void
+  ): { group: HTMLElement; buttons: HTMLButtonElement[] } {
     const group = el('div', 'field');
     group.append(el('span', 'field-label', label));
     const list = el('div', 'pick-grid');
@@ -202,7 +203,7 @@ export function mountCreator(host: HTMLElement, initial: Draft, hooks: CreatorHo
   });
   root.append(weapons.group, charms.group);
 
-  const actions = el('div', 'title-actions');
+  const actions = el('div', 'title-actions sticky-actions');
   const begin = el('button', 'btn btn-primary', 'Begin descent');
   begin.type = 'submit';
   const back = el('button', 'btn', 'Back');
@@ -220,9 +221,7 @@ export function mountCreator(host: HTMLElement, initial: Draft, hooks: CreatorHo
   function refresh(): void {
     const name = draft.look.name;
     const valid = isValidName(name);
-    nameHint.textContent = valid
-      ? `${name.length} / ${NAME_MAX}`
-      : `Use ${NAME_MIN} to ${NAME_MAX} letters, numbers and single spaces.`;
+    nameHint.textContent = valid ? `${name.length} / ${NAME_MAX}` : `Use ${NAME_MIN} to ${NAME_MAX} letters, numbers and single spaces.`;
     nameHint.classList.toggle('is-error', !valid);
     nameInput.setAttribute('aria-invalid', valid ? 'false' : 'true');
     begin.disabled = !valid;
@@ -286,5 +285,6 @@ export function mountCreator(host: HTMLElement, initial: Draft, hooks: CreatorHo
 
   host.append(root);
   refresh();
-  nameInput.focus();
+  // A finger cannot use the field before tapping it, and focusing it here would raise the keyboard over the form.
+  if (!isTouchFirst()) nameInput.focus();
 }

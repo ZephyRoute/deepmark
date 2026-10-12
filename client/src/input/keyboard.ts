@@ -10,6 +10,14 @@ export type Action =
   | 'vault'
   | 'mute'
   | 'retryVerify'
+  | 'retryBoard'
+  | 'retryVault'
+  | 'again'
+  | 'copyRecovery'
+  | 'restoreRecovery'
+  | 'restoreCheck'
+  | 'restoreConfirm'
+  | 'restoreCancel'
   | 'tabFresh'
   | 'tabVeteran'
   | 'pickLantern'
@@ -49,6 +57,14 @@ const ACTIONS: readonly Action[] = [
   'vault',
   'mute',
   'retryVerify',
+  'retryBoard',
+  'retryVault',
+  'again',
+  'copyRecovery',
+  'restoreRecovery',
+  'restoreCheck',
+  'restoreConfirm',
+  'restoreCancel',
   'tabFresh',
   'tabVeteran',
   'pickLantern',

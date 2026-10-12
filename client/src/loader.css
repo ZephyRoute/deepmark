@@ -1,0 +1,75 @@
+/* Shared by the game and the stats page: both define --cyan, --line and --muted. */
+.loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.loader-mark {
+  width: 56px;
+  height: 56px;
+  display: block;
+  animation: loader-breathe 2.4s ease-in-out infinite;
+}
+
+.loader-mark .seal-icon {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: drop-shadow(0 0 10px rgba(126, 240, 224, 0.4));
+}
+
+.loader-mark .seal-outer,
+.loader-mark .seal-inner,
+.loader-mark .seal-eye {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.loader-mark .seal-pupil { fill: var(--cyan); }
+
+.loader-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.loader-rows {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.loader-row {
+  display: block;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: linear-gradient(90deg, rgba(232, 224, 208, 0.04) 20%, rgba(126, 240, 224, 0.1) 50%, rgba(232, 224, 208, 0.04) 80%) 0 0 / 200% 100%;
+  animation: loader-sweep 1.8s ease-in-out infinite;
+}
+
+.loader-row:nth-child(2) { animation-delay: 150ms; }
+.loader-row:nth-child(3) { animation-delay: 300ms; }
+
+@keyframes loader-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes loader-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loader-mark { animation: none; }
+  .loader-row { animation: none; }
+}

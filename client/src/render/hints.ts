@@ -4,6 +4,8 @@
  * of the board, never a modal, that steps out of the way the moment the
  * player answers it, so it never blocks input.
  */
+import { readJson, writeJson } from '../storage';
+
 export type HintId = 'move' | 'combat' | 'choice';
 
 const STORAGE_KEY = 'deepmark:hints:v1';
@@ -20,21 +22,14 @@ interface HintRecord {
 }
 
 function load(): HintRecord {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as HintRecord;
-  } catch {
-    // Private mode or corrupt data: the hint just shows again, which is harmless.
-  }
+  const stored = readJson(STORAGE_KEY);
+  // Missing or corrupt data just shows the hint again, which is harmless.
+  if (stored && typeof stored === 'object' && 'seen' in stored) return stored as HintRecord;
   return { seen: {} };
 }
 
 function save(): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
-  } catch {
-    // Nothing persists, but the hint still behaves correctly for this tab.
-  }
+  writeJson(STORAGE_KEY, record);
 }
 
 let record = load();

@@ -1,5 +1,6 @@
 import { contract, TransactionBuilder, type Keypair, type Transaction } from '@stellar/stellar-sdk';
 import type { HeroChoice } from './choice';
+import { readSentResult } from './txOutcome';
 import { STELLAR_CONFIG } from './config';
 
 export interface Look {
@@ -97,10 +98,7 @@ type Call<T> = Promise<contract.AssembledTransaction<T>>;
 // contract.
 interface DeepmarkContractApi {
   start_run: (args: { player: string; choice: HeroChoice }, options?: contract.MethodOptions) => Call<contract.Result<RunTicket>>;
-  finish_run: (
-    args: { player: string; actions: Uint8Array },
-    options?: contract.MethodOptions
-  ) => Call<contract.Result<RunOutcome>>;
+  finish_run: (args: { player: string; actions: Uint8Array }, options?: contract.MethodOptions) => Call<contract.Result<RunOutcome>>;
   get_record: (args: { player: string }, options?: contract.MethodOptions) => Call<PlayerRecord | undefined>;
   get_open_run: (args: { player: string }, options?: contract.MethodOptions) => Call<RunTicket | undefined>;
   top_fresh: (options?: contract.MethodOptions) => Call<TopEntry[]>;
@@ -155,12 +153,9 @@ export { CONTRACT_ERROR, freshChoice, isContractError, veteranChoice } from './c
  */
 export async function startRun(keypair: Keypair, choice: HeroChoice): Promise<RunTicket> {
   const client = await clientFor(keypair);
-  const assembled = await client.start_run(
-    { player: keypair.publicKey(), choice },
-    { timeoutInSeconds: SEND_TIMEOUT_SECONDS }
-  );
+  const assembled = await client.start_run({ player: keypair.publicKey(), choice }, { timeoutInSeconds: SEND_TIMEOUT_SECONDS });
   const sent = await assembled.signAndSend();
-  const result = sent.result;
+  const result = readSentResult(sent);
   if (result.isErr()) throw new Error(`start_run rejected: ${result.unwrapErr().message}`);
   return result.unwrap();
 }
@@ -182,7 +177,7 @@ export async function finishRun(keypair: Keypair, actions: readonly number[]): P
     { timeoutInSeconds: SEND_TIMEOUT_SECONDS }
   );
   const sent = await assembled.signAndSend();
-  const result = sent.result;
+  const result = readSentResult(sent);
   if (result.isErr()) throw new Error(`finish_run rejected: ${result.unwrapErr().message}`);
   return { hash: sent.sendTransactionResponse?.hash ?? '', outcome: result.unwrap() };
 }
@@ -223,6 +218,11 @@ export async function fetchPlayers(start: number, limit: number): Promise<Player
   const client = await readClient();
   const assembled = await client.players({ start, limit });
   return assembled.result ?? [];
+}
+
+export async function fetchHero(id: number): Promise<Hero | null> {
+  const client = await readClient();
+  return (await client.hero({ id })).result ?? null;
 }
 
 /** Every delver an address owns. At most 64, so one call per delver is bounded. */
