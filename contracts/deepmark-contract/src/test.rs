@@ -38,6 +38,7 @@ fn setup<'a>() -> Fixture<'a> {
     env.mock_all_auths();
     set_ledger(&env, 100);
 
+    let admin = Address::generate(&env);
     let issuer = Address::generate(&env);
     let common = env
         .register_stellar_asset_contract_v2(issuer.clone())
@@ -49,7 +50,7 @@ fn setup<'a>() -> Fixture<'a> {
 
     let contract_id = env.register(
         DeepmarkContract,
-        (common.clone(), rare.clone(), core.clone()),
+        (admin, common.clone(), rare.clone(), core.clone()),
     );
     for token in [&common, &rare, &core] {
         StellarAssetClient::new(&env, token).set_admin(&contract_id);
@@ -496,7 +497,12 @@ fn a_failed_mint_never_loses_the_verified_run() {
     ];
     let id = env.register(
         DeepmarkContract,
-        (bogus[0].clone(), bogus[1].clone(), bogus[2].clone()),
+        (
+            Address::generate(&env),
+            bogus[0].clone(),
+            bogus[1].clone(),
+            bogus[2].clone(),
+        ),
     );
     let client = DeepmarkContractClient::new(&env, &id);
     let player = Address::generate(&env);
@@ -666,7 +672,14 @@ fn nobody_can_act_for_an_address_that_did_not_sign() {
     let env = Env::default();
     set_ledger(&env, 100);
     let a = Address::generate(&env);
-    let id = env.register(DeepmarkContract, (a.clone(), a.clone(), a.clone()));
+    // The constructor needs the admin's signature, so allow it for deployment
+    // only and then drop every mocked authorization.
+    env.mock_all_auths();
+    let id = env.register(
+        DeepmarkContract,
+        (a.clone(), a.clone(), a.clone(), a.clone()),
+    );
+    env.set_auths(&[]);
     let client = DeepmarkContractClient::new(&env, &id);
     let victim = Address::generate(&env);
 
